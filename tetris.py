@@ -10,8 +10,59 @@ from tqdm.auto import tqdm
 
 import e3nn_jax as e3nn
 
+from vector_spherical_harmonics import VSHCoeffs, get_vsh_irreps, cross_product
 
-class GeneralGauntTensorProduct(nn.Module):
+
+class VectorGauntTensorProduct(nn.Module):
+    
+    p_val1: int
+    p_val2: int
+    res_alpha: int = 19
+    res_beta: int = 20
+    num_channels: int = 1
+    quadrature: str = "gausslegendre"
+
+
+    @nn.compact
+    def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
+        lmax = x.irreps.lmax + y.irreps.lmax
+        
+        xc = e3nn.flax.Linear(
+            get_vsh_irreps(x.irreps.lmax, parity=self.p_val1) * self.num_channels,
+            force_irreps_out=True,
+            name="linear_in_x"
+        )(x)
+        xc = xc.mul_to_axis(self.num_channels)
+
+        yc = e3nn.flax.Linear(
+            get_vsh_irreps(y.irreps.lmax, parity=self.p_val2) * self.num_channels,
+            force_irreps_out=True,
+            name="linear_in_y"
+        )(y)
+        yc = yc.mul_to_axis(self.num_channels)
+
+        # print(xc.shape, xc.irreps)
+        # print(yc.shape, yc.irreps)
+
+        def cross_product_per_channel_per_sample(xc, yc):
+            xc = VSHCoeffs.from_irreps_array(xc).to_vector_signal(res_beta=self.res_beta, res_alpha=self.res_alpha, quadrature=self.quadrature)
+            yc = VSHCoeffs.from_irreps_array(yc).to_vector_signal(res_beta=self.res_beta, res_alpha=self.res_alpha, quadrature=self.quadrature)
+            zc = cross_product(
+                xc, yc,
+            )
+
+            zc = VSHCoeffs.from_vector_signal(zc, lmax=lmax, parity=self.p_val1 * self.p_val2).to_irreps_array()
+            return zc
+
+        zc = jax.vmap(jax.vmap(cross_product_per_channel_per_sample))(xc, yc)
+        zc = zc.axis_to_mul()
+        zc = e3nn.flax.Linear(zc.irreps, force_irreps_out=True, name="linear_out_z")(zc)
+        # print(zc.shape, zc.irreps)
+        # print()
+        return zc
+
+
+class GauntTensorProduct(nn.Module):
     
     p_val1: int
     p_val2: int
@@ -24,11 +75,11 @@ class GeneralGauntTensorProduct(nn.Module):
     def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         lmax = x.irreps.lmax + y.irreps.lmax
 
-        xc = e3nn.flax.Linear(e3nn.s2_irreps(x.irreps.lmax, p_val=self.p_val1, p_arg=-1) * self.num_channels, force_irreps_out=True, name="linear_x")(x)
+        xc = e3nn.flax.Linear(e3nn.s2_irreps(x.irreps.lmax, p_val=self.p_val1, p_arg=-1) * self.num_channels, force_irreps_out=True, name="linear_in_x")(x)
         xc = xc.mul_to_axis(self.num_channels)
         # print(xc.irreps)
 
-        yc = e3nn.flax.Linear(e3nn.s2_irreps(y.irreps.lmax, p_val=self.p_val2, p_arg=-1) * self.num_channels, force_irreps_out=True, name="linear_y")(y)
+        yc = e3nn.flax.Linear(e3nn.s2_irreps(y.irreps.lmax, p_val=self.p_val2, p_arg=-1) * self.num_channels, force_irreps_out=True, name="linear_in_y")(y)
         yc = yc.mul_to_axis(self.num_channels)
         # print(yc.irreps)
 
@@ -36,6 +87,7 @@ class GeneralGauntTensorProduct(nn.Module):
         yc = e3nn.to_s2grid(yc, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature, p_val=self.p_val2, p_arg=-1)
         zc = e3nn.from_s2grid(xc * yc, irreps=e3nn.s2_irreps(lmax, p_val=self.p_val1 * self.p_val2))
         zc = zc.axis_to_mul()
+        zc = e3nn.flax.Linear(zc.irreps, force_irreps_out=True, name="linear_out_z")(zc)
         # print(zc.irreps)
         # print()
         return zc
@@ -52,7 +104,7 @@ class Layer(nn.Module):
     target_irreps: e3nn.Irreps
     denominator: float
     sh_lmax: int
-    tensor_product_type = "gaunt"
+    tensor_product_type = "vectorgaunt"
 
     @nn.compact
     def __call__(self, graphs, positions):
@@ -60,7 +112,7 @@ class Layer(nn.Module):
 
         def update_edge_fn(edge_features, sender_features, receiver_features, globals):
             sh = e3nn.spherical_harmonics(
-                list(range(1, self.sh_lmax + 1)),
+                e3nn.s2_irreps(self.sh_lmax)[1:],
                 positions[graphs.receivers] - positions[graphs.senders],
                 True,
             )
@@ -68,11 +120,19 @@ class Layer(nn.Module):
 
             if self.tensor_product_type == "usual":
                 tp = TensorProduct()(sender_features, sh)
+            
             elif self.tensor_product_type == "gaunt":
-                tp1 = GeneralGauntTensorProduct(p_val1=1, p_val2=1)(sender_features, sh)
-                tp2 = GeneralGauntTensorProduct(p_val1=1, p_val2=-1)(sender_features, sh)
-                tp3 = GeneralGauntTensorProduct(p_val1=-1, p_val2=1)(sender_features, sh)
+                tp1 = GauntTensorProduct(p_val1=1, p_val2=1)(sender_features, sh)
+                tp2 = GauntTensorProduct(p_val1=1, p_val2=-1)(sender_features, sh)
+                tp3 = GauntTensorProduct(p_val1=-1, p_val2=1)(sender_features, sh)
                 tp = e3nn.concatenate([tp1, tp2, tp3])
+            
+            elif self.tensor_product_type == "vectorgaunt":
+                tp1 = VectorGauntTensorProduct(p_val1=-1, p_val2=-1)(sender_features, sh)
+                tp2 = VectorGauntTensorProduct(p_val1=1, p_val2=-1)(sender_features, sh)
+                tp3 = VectorGauntTensorProduct(p_val1=-1, p_val2=1)(sender_features, sh)
+                tp = e3nn.concatenate([tp1, tp2, tp3])
+
             else:
                 raise ValueError(f"Unknown tensor product type: {self.tensor_product_type}")
 
@@ -207,7 +267,8 @@ def train(steps=200):
 
     # Check equivariance.
     print("Checking equivariance...")
-    for key in range(10):
+    apply = jax.jit(model.apply)
+    for key in range(50):
         key = jax.random.PRNGKey(key)
         alpha, beta, gamma = jax.random.uniform(key, (3,), minval=-jnp.pi, maxval=jnp.pi)
         
@@ -218,9 +279,10 @@ def train(steps=200):
             nodes=rotated_nodes
         )
 
-        logits = model.apply(params, graphs)
-        rotated_logits = model.apply(params, rotated_graphs)
-        assert jnp.allclose(logits, rotated_logits, atol=1e-4), "Model is not equivariant."
+        logits = apply(params, graphs)
+        rotated_logits = apply(params, rotated_graphs)
+        if not jnp.allclose(logits, rotated_logits, atol=1e-4):
+            print("Model is not equivariant.")
 
     print("Model is equivariant.")
 

@@ -148,7 +148,7 @@ class VSHCoeffs(dict):
         return e3nn.concatenate(all_vector_coeffs)
 
     def to_vector_signal(
-        self, res_beta: int = 90, res_alpha: int = 89, quadrature="soft"
+        self, res_beta: int, res_alpha: int, quadrature: str
     ) -> e3nn.SphericalSignal:
         """Converts a dictionary of VSH coefficients to a vector spherical signal."""
         vector_coeffs = self.to_vector_coeffs()
@@ -163,6 +163,12 @@ class VSHCoeffs(dict):
         )
         return vector_sig
 
+    def from_vector_signal(
+        sig: e3nn.SphericalSignal, lmax: int, parity: int
+    ) -> "VSHCoeffs":
+        return get_vsh_coeffs(sig, lmax=lmax, parity=parity)
+
+
     def filter(self, keep: Sequence[e3nn.Irreps]) -> "VSHCoeffs":
         """Filters out to keep only certain irreps."""
         keep = e3nn.Irreps(keep)
@@ -172,3 +178,79 @@ class VSHCoeffs(dict):
             if coeff_ir in keep:
                 new_coeffs[(j, l)] = coeff
         return new_coeffs
+
+
+def vector_spherical_harmonics(
+    j: int, l: int, mj: int, parity: int = -1
+) -> VSHCoeffs:
+    """Returns a (pseudo)-vector spherical harmonic for a given (j, l, mj)."""
+    if j not in [l - 1, l, l + 1]:
+        raise ValueError(f"Invalid j={j} for l={l}.")
+
+    if mj not in range(-j, j + 1):
+        raise ValueError(f"Invalid mj={mj} for j={j}.")
+
+    coeffs = e3nn.IrrepsArray(
+        get_vsh_irrep(j, l, parity),
+        jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)]),
+    )
+    coeffs_dict = VSHCoeffs(parity=parity)
+    coeffs_dict[(j, l)] = coeffs
+    return coeffs_dict
+
+
+
+def _wrap_fn_for_vector_signal(fn):
+    """vmaps a fn over res_beta and res_alpha axes."""
+    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
+    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
+    return fn
+
+
+def get_vsh_coeffs_at_mj(
+    sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
+) -> float:
+    """Returns the component of Y_{j_out, l_out, mj_out} in the signal sig."""
+    vsh_signal = vector_spherical_harmonics(j_out, l_out, mj_out).to_vector_signal(
+        res_beta=sig.res_beta, res_alpha=sig.res_alpha, quadrature=sig.quadrature
+    )
+    dot_product = sig.replace_values(
+        _wrap_fn_for_vector_signal(jnp.dot)(sig.grid_values, vsh_signal.grid_values)
+    )
+    return dot_product.integrate().array[0] / (4 * jnp.pi)
+
+
+def get_vsh_coeffs_at_j(
+    sig: e3nn.SphericalSignal,
+    j_out: int,
+    l_out: int,
+    parity_out: int,
+) -> e3nn.IrrepsArray:
+    """Returns the components of Y_{j_out, l_out, mj_out} in the signal sig for all mj_out in [-j_out, ..., j_out]."""
+    computed_coeffs = jnp.stack(
+        [
+            get_vsh_coeffs_at_mj(sig, j_out, l_out, mj_out)
+            for mj_out in range(-j_out, j_out + 1)
+        ]
+    )
+    computed_coeffs = e3nn.IrrepsArray(
+        get_vsh_irrep(j_out, l_out, parity_out), computed_coeffs
+    )
+    return computed_coeffs
+
+
+def get_vsh_coeffs(sig: e3nn.SphericalSignal, lmax: int, parity: int) -> VSHCoeffs:
+    """Returns the components of Y_{j_out, l_out, mj_out} in the signal sig for all mj_out in [-j_out, ..., j_out] and j_out in [-l_out, ..., l_out] and l_out upto lmax."""
+    if sig.shape[-3] != 3:
+        raise ValueError(f"Invalid shape {sig.shape} for signal.")
+
+    result = VSHCoeffs(parity=parity)
+    for j_out, l_out in vsh_iterator(lmax):
+        result[j_out, l_out] = get_vsh_coeffs_at_j(sig, j_out, l_out, parity)
+    return result
+
+
+def cross_product(sig1: e3nn.SphericalSignal, sig2: e3nn.SphericalSignal) -> e3nn.SphericalSignal:
+    return sig1.replace_values(
+        _wrap_fn_for_vector_signal(jnp.cross)(sig1.grid_values, sig2.grid_values)
+    )
