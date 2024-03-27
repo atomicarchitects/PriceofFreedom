@@ -194,16 +194,35 @@ def train(steps=200):
     # Train
     wall = time.perf_counter()
     print("Training...", flush=True)
-    bar = tqdm(range(steps))
-    for step in bar:
-        params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
-        
-        bar.set_postfix(accuracy=f"{100 * accuracy:.2f}%")    
-        if accuracy == 1.0:
-            break
+    with tqdm(range(steps)) as bar:
+        for step in bar:
+            params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
+            
+            bar.set_postfix(accuracy=f"{100 * accuracy:.2f}%")    
+            if accuracy == 1.0:
+                break
 
     print(f"Final accuracy = {100 * accuracy:.2f}%")
     print("Final prediction:", preds)
+
+    # Check equivariance.
+    print("Checking equivariance...")
+    for key in range(10):
+        key = jax.random.PRNGKey(key)
+        alpha, beta, gamma = jax.random.uniform(key, (3,), minval=-jnp.pi, maxval=jnp.pi)
+        
+        rotated_nodes = e3nn.IrrepsArray("1o", graphs.nodes)
+        rotated_nodes = rotated_nodes.transform_by_angles(alpha, beta, gamma)
+        rotated_nodes = rotated_nodes.array
+        rotated_graphs = graphs._replace(
+            nodes=rotated_nodes
+        )
+
+        logits = model.apply(params, graphs)
+        rotated_logits = model.apply(params, rotated_graphs)
+        assert jnp.allclose(logits, rotated_logits, atol=1e-4), "Model is not equivariant."
+
+    print("Model is equivariant.")
 
 
 if __name__ == "__main__":
