@@ -53,8 +53,10 @@ def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
 
 
 class VSHCoeffs(dict):
-    def __init__(self, parity, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    """Parity = -1 for VSH, parity = 1 for PVSH."""
+
+    def __init__(self, parity: int):
+        super().__init__()
         if parity not in [1, -1]:
             raise ValueError(f"Invalid parity {parity}.")
         self.parity = parity
@@ -69,7 +71,7 @@ class VSHCoeffs(dict):
         assert mul == 1, f"Invalid multiplicity {mul} for VSH {j, l}."
         assert ir == get_vsh_irrep(
             j, l, self.parity
-        ), f"Invalid irrep {ir} for VSH {j, l}."
+        ), f"Invalid irrep {ir} for VSH {j, l} with parity {self.parity}."
         super().__setitem__(key, value)
 
     def get_jmax(self) -> int:
@@ -106,7 +108,11 @@ class VSHCoeffs(dict):
         return coeffs
 
     def __repr__(self):
-        lines = [f"VSHCoeffs(parity={self.parity})"]
+        if self.parity == -1:
+            vsh_type = "VSH Coefficients"
+        elif self.parity == 1:
+            vsh_type = "PVSH Coefficients"
+        lines = [f"{vsh_type}"]
         for key, value in self.items():
             lines.append(f" {key}: {value}")
         return "\n".join(lines)
@@ -168,7 +174,6 @@ class VSHCoeffs(dict):
     ) -> "VSHCoeffs":
         return get_vsh_coeffs(sig, lmax=lmax, parity=parity)
 
-
     def filter(self, keep: Sequence[e3nn.Irreps]) -> "VSHCoeffs":
         """Filters out to keep only certain irreps."""
         keep = e3nn.Irreps(keep)
@@ -179,25 +184,24 @@ class VSHCoeffs(dict):
                 new_coeffs[(j, l)] = coeff
         return new_coeffs
 
+    @classmethod
+    def vector_spherical_harmonics(
+        cls, j: int, l: int, mj: int, parity: int = -1
+    ) -> "VSHCoeffs":
+        """Returns a (pseudo)-vector spherical harmonic for a given (j, l, mj)."""
+        if j not in [l - 1, l, l + 1]:
+            raise ValueError(f"Invalid j={j} for l={l}.")
 
-def vector_spherical_harmonics(
-    j: int, l: int, mj: int, parity: int = -1
-) -> VSHCoeffs:
-    """Returns a (pseudo)-vector spherical harmonic for a given (j, l, mj)."""
-    if j not in [l - 1, l, l + 1]:
-        raise ValueError(f"Invalid j={j} for l={l}.")
+        if mj not in range(-j, j + 1):
+            raise ValueError(f"Invalid mj={mj} for j={j}.")
 
-    if mj not in range(-j, j + 1):
-        raise ValueError(f"Invalid mj={mj} for j={j}.")
-
-    coeffs = e3nn.IrrepsArray(
-        get_vsh_irrep(j, l, parity),
-        jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)]),
-    )
-    coeffs_dict = VSHCoeffs(parity=parity)
-    coeffs_dict[(j, l)] = coeffs
-    return coeffs_dict
-
+        coeffs = e3nn.IrrepsArray(
+            get_vsh_irrep(j, l, parity),
+            jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)]),
+        )
+        coeffs_dict = cls(parity=parity)
+        coeffs_dict[(j, l)] = coeffs
+        return coeffs_dict
 
 
 def _wrap_fn_for_vector_signal(fn):
@@ -211,7 +215,9 @@ def get_vsh_coeffs_at_mj(
     sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
 ) -> float:
     """Returns the component of Y_{j_out, l_out, mj_out} in the signal sig."""
-    vsh_signal = vector_spherical_harmonics(j_out, l_out, mj_out).to_vector_signal(
+    vsh_signal = VSHCoeffs.vector_spherical_harmonics(
+        j_out, l_out, mj_out
+    ).to_vector_signal(
         res_beta=sig.res_beta, res_alpha=sig.res_alpha, quadrature=sig.quadrature
     )
     dot_product = sig.replace_values(
@@ -250,7 +256,19 @@ def get_vsh_coeffs(sig: e3nn.SphericalSignal, lmax: int, parity: int) -> VSHCoef
     return result
 
 
-def cross_product(sig1: e3nn.SphericalSignal, sig2: e3nn.SphericalSignal) -> e3nn.SphericalSignal:
+def cross_product(
+    sig1: e3nn.SphericalSignal, sig2: e3nn.SphericalSignal
+) -> e3nn.SphericalSignal:
+    """Computes the pointwise cross product of two vector signals."""
     return sig1.replace_values(
         _wrap_fn_for_vector_signal(jnp.cross)(sig1.grid_values, sig2.grid_values)
+    )
+
+
+def dot_product(
+    sig1: e3nn.SphericalSignal, sig2: e3nn.SphericalSignal
+) -> e3nn.SphericalSignal:
+    """Computes the pointwise dot product of two vector signals."""
+    return sig1.replace_values(
+        _wrap_fn_for_vector_signal(jnp.dot)(sig1.grid_values, sig2.grid_values)
     )
