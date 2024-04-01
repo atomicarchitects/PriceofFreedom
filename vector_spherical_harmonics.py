@@ -8,33 +8,6 @@ import e3nn_jax as e3nn
 import chex
 
 
-def vsh_iterator(jmax: int):
-    """Iterates over all VSH up to some jmax."""
-    for j in range(jmax + 1):
-        for l in [j - 1, j, j + 1]:
-            if j == 0 and l != 1:
-                continue
-            yield j, l
-
-
-
-def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
-    """Returns the change of basis for each (j, l) pair."""
-    if parity not in [1, -1]:
-        raise ValueError(f"Invalid parity {parity}.")
-
-    rtps = {}
-    for j, l in vsh_iterator(jmax):
-        rtp = e3nn.reduced_tensor_product_basis(
-            "ij",
-            i=e3nn.Irrep(1, parity),
-            j=e3nn.Irrep(l, (-1) ** (l)),
-            keep_ir=VSHCoeffs.get_vsh_irrep(j, l, parity),
-        )
-        rtps[(j, l)] = rtp
-    return rtps
-
-
 @jax.tree_util.register_pytree_node_class
 class VSHCoeffs(dict):
     """Parity = -1 for VSH, parity = 1 for PVSH."""
@@ -58,7 +31,7 @@ class VSHCoeffs(dict):
         ), f"Invalid irrep {ir} for VSH {j, l} with parity {self.parity}."
         super().__setitem__(key, value)
 
-    def get_jmax(self) -> int:
+    def jmax(self) -> int:
         """Returns the maximum j in a dictionary of coefficients."""
         return max(j for j, _ in self.keys())
 
@@ -140,7 +113,7 @@ class VSHCoeffs(dict):
 
     def to_vector_coeffs(self) -> e3nn.IrrepsArray:
         """Converts a dictionary of VSH coefficients to a 3D IrrepsArray."""
-        rtps = get_change_of_basis_matrices(jmax=self.get_jmax(), parity=self.parity)
+        rtps = get_change_of_basis_matrices(jmax=self.jmax(), parity=self.parity)
         all_vector_coeffs = []
         for j, l in self.keys():
             rtp = rtps[(j, l)]
@@ -173,10 +146,16 @@ class VSHCoeffs(dict):
 
     @classmethod
     def from_vector_signal(
-        cls,
-        sig: e3nn.SphericalSignal, lmax: int, parity: int
+        cls, sig: e3nn.SphericalSignal, jmax: int, parity: int
     ) -> "VSHCoeffs":
-        return get_vsh_coeffs(sig, lmax=lmax, parity=parity)
+        """Returns the components of Y_{j_out, l_out, mj_out} in the signal sig for all mj_out in [-j_out, ..., j_out] and j_out in [-l_out, ..., l_out] and l_out upto lmax."""
+        if sig.shape[-3] != 3:
+            raise ValueError(f"Invalid shape {sig.shape} for signal.")
+
+        result = VSHCoeffs(parity=parity)
+        for j_out, l_out in vsh_iterator(jmax):
+            result[(j_out, l_out)] = get_vsh_coeffs_at_j(sig, j_out, l_out, parity)
+        return result
 
     def filter(self, keep: Sequence[e3nn.Irreps]) -> "VSHCoeffs":
         """Filters out to keep only certain irreps."""
@@ -207,13 +186,31 @@ class VSHCoeffs(dict):
         coeffs_dict[(j, l)] = coeffs
         return coeffs_dict
 
-    def pointwise_cross_product(self, other: "VSHCoeffs", res_beta: int, res_alpha: int, quadrature: str) -> "VSHCoeffs":
+    def reduce_pointwise_cross_product(
+        self, other: "VSHCoeffs", res_beta: int, res_alpha: int, quadrature: str
+    ) -> "VSHCoeffs":
         """Computes the pointwise cross product on the sphere, and converts back to VSH coefficients."""
         self_sig = self.to_vector_signal(res_beta, res_alpha, quadrature)
         other_sig = other.to_vector_signal(res_beta, res_alpha, quadrature)
         cross_sig = cross_product(self_sig, other_sig)
-        return VSHCoeffs.from_vector_signal(cross_sig, lmax=self.get_jmax() + other.get_jmax(), parity=self.parity * other.parity)
-    
+        return VSHCoeffs.from_vector_signal(
+            cross_sig,
+            jmax=self.jmax() + other.jmax(),
+            parity=self.parity * other.parity,
+        )
+
+    def reduce_pointwise_dot_product(
+        self, other: "VSHCoeffs", res_beta: int, res_alpha: int, quadrature: str
+    ) -> e3nn.SphericalSignal:
+        """Computes the pointwise dot product on the sphere, and converts back to scalar SH coefficients."""
+        self_sig = self.to_vector_signal(res_beta, res_alpha, quadrature)
+        other_sig = other.to_vector_signal(res_beta, res_alpha, quadrature)
+        dot_sig = dot_product(self_sig, other_sig)
+        return e3nn.from_s2grid(
+            dot_sig,
+            irreps=e3nn.s2_irreps(self.jmax() + other.jmax()),
+        )
+
     def tree_flatten(self):
         return list(self.values()), (self.keys(), self.parity)
 
@@ -237,15 +234,38 @@ def get_vsh_coeffs_at_mj(
     sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
 ) -> float:
     """Returns the component of Y_{j_out, l_out, mj_out} in the signal sig."""
-    vsh_signal = VSHCoeffs.vector_spherical_harmonics(
-        j_out, l_out, mj_out
-    ).to_vector_signal(
+    vsh_coeff = VSHCoeffs.vector_spherical_harmonics(j_out, l_out, mj_out)
+    vsh_signal = vsh_coeff.to_vector_signal(
         res_beta=sig.res_beta, res_alpha=sig.res_alpha, quadrature=sig.quadrature
     )
-    dot_product = sig.replace_values(
-        _wrap_fn_for_vector_signal(jnp.dot)(sig.grid_values, vsh_signal.grid_values)
-    )
-    return dot_product.integrate().array[0] / (4 * jnp.pi)
+    sig_vsh_dot_product = dot_product(sig, vsh_signal)
+    return sig_vsh_dot_product.integrate().array[-1] / (4 * jnp.pi)
+
+
+def vsh_iterator(jmax: int):
+    """Iterates over all VSH up to some jmax."""
+    for j in range(jmax + 1):
+        for l in [j - 1, j, j + 1]:
+            if j == 0 and l != 1:
+                continue
+            yield j, l
+
+
+def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
+    """Returns the change of basis for each (j, l) pair."""
+    if parity not in [1, -1]:
+        raise ValueError(f"Invalid parity {parity}.")
+
+    rtps = {}
+    for j, l in vsh_iterator(jmax):
+        rtp = e3nn.reduced_tensor_product_basis(
+            "ij",
+            i=e3nn.Irrep(1, parity),
+            j=e3nn.Irrep(l, (-1) ** (l)),
+            keep_ir=VSHCoeffs.get_vsh_irrep(j, l, parity),
+        )
+        rtps[(j, l)] = rtp
+    return rtps
 
 
 def get_vsh_coeffs_at_j(
@@ -265,17 +285,6 @@ def get_vsh_coeffs_at_j(
         VSHCoeffs.get_vsh_irrep(j_out, l_out, parity_out), computed_coeffs
     )
     return computed_coeffs
-
-
-def get_vsh_coeffs(sig: e3nn.SphericalSignal, lmax: int, parity: int) -> VSHCoeffs:
-    """Returns the components of Y_{j_out, l_out, mj_out} in the signal sig for all mj_out in [-j_out, ..., j_out] and j_out in [-l_out, ..., l_out] and l_out upto lmax."""
-    if sig.shape[-3] != 3:
-        raise ValueError(f"Invalid shape {sig.shape} for signal.")
-
-    result = VSHCoeffs(parity=parity)
-    for j_out, l_out in vsh_iterator(lmax):
-        result[j_out, l_out] = get_vsh_coeffs_at_j(sig, j_out, l_out, parity)
-    return result
 
 
 def cross_product(

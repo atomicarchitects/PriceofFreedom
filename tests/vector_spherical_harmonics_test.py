@@ -44,15 +44,13 @@ def test_cross_product_selection_rules(key):
     j1 = int(jax.random.randint(j1_key, (), 1, 11))
     l1 = int(jax.random.randint(l1_key, (), j1 - 1, j1 + 2))
     coeffs1 = VSHCoeffs(parity=-1)
-    coeffs1[(j1, l1)] = e3nn.normal(
-        e3nn.Irrep(j1, (-1) ** (l1 + 1)), coeffs1_key)
+    coeffs1[(j1, l1)] = e3nn.normal(e3nn.Irrep(j1, (-1) ** (l1 + 1)), coeffs1_key)
 
     j2_key, l2_key, coeffs2_key, key = jax.random.split(key, 4)
     j2 = int(jax.random.randint(j2_key, (), 1, 11))
     l2 = int(jax.random.randint(l2_key, (), j2 - 1, j2 + 2))
     coeffs2 = VSHCoeffs(parity=-1)
-    coeffs2[(j2, l2)] = e3nn.normal(
-        e3nn.Irrep(j2, (-1) ** (l2 + 1)), coeffs2_key)
+    coeffs2[(j2, l2)] = e3nn.normal(e3nn.Irrep(j2, (-1) ** (l2 + 1)), coeffs2_key)
 
     cross_product = coeffs1.pointwise_cross_product(
         coeffs2, res_beta=80, res_alpha=49, quadrature="gausslegendre"
