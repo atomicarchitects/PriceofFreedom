@@ -1,4 +1,3 @@
-
 import time
 import sys
 
@@ -20,11 +19,24 @@ flags.DEFINE_integer("num_layers", 2, "Number of layers in the network")
 flags.DEFINE_integer("hidden_lmax", 3, "Hidden layer lmax")
 flags.DEFINE_integer("sh_lmax", 3, "Spherical harmonics lmax")
 flags.DEFINE_integer("multiplicity", 8, "Multiplicity")
-flags.DEFINE_integer("num_channels_for_gaunt_TP", 1, "Number of channels for Gaunt tensor product")
-flags.DEFINE_enum("tensor_product_type", "vectorgaunt", ["usual", "gaunt", "vectorgaunt"], "Type of tensor product")
+flags.DEFINE_integer(
+    "num_channels_for_gaunt_TP", 1, "Number of channels for Gaunt tensor product"
+)
+flags.DEFINE_bool(
+    "use_from_s2grid_direct_in_gaunt_TP",
+    False,
+    "Use from_s2grid_direct in Gaunt tensor product",
+)
+flags.DEFINE_enum(
+    "tensor_product_type",
+    "vectorgaunt",
+    ["usual", "gaunt", "vectorgaunt"],
+    "Type of tensor product",
+)
 flags.DEFINE_bool("profile", False, "Enable profiling")
 FLAGS = flags.FLAGS
 FLAGS(sys.argv)
+
 
 class VectorGauntTensorProduct(nn.Module):
 
@@ -37,17 +49,18 @@ class VectorGauntTensorProduct(nn.Module):
 
     @nn.compact
     def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-        lmax = x.irreps.lmax + y.irreps.lmax
 
         xc = e3nn.flax.Linear(
-            VSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1) * self.num_channels,
+            VSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1)
+            * self.num_channels,
             force_irreps_out=True,
             name="linear_in_x",
         )(x)
         xc = xc.mul_to_axis(self.num_channels)
 
         yc = e3nn.flax.Linear(
-            VSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2) * self.num_channels,
+            VSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2)
+            * self.num_channels,
             force_irreps_out=True,
             name="linear_in_y",
         )(y)
@@ -57,7 +70,10 @@ class VectorGauntTensorProduct(nn.Module):
             xc = VSHCoeffs.from_irreps_array(xc)
             yc = VSHCoeffs.from_irreps_array(yc)
             zc = xc.reduce_pointwise_cross_product(
-                yc, res_beta=self.res_beta, res_alpha=self.res_alpha, quadrature=self.quadrature
+                yc,
+                res_beta=self.res_beta,
+                res_alpha=self.res_alpha,
+                quadrature=self.quadrature,
             )
             zc = zc.to_irreps_array()
             return zc
@@ -76,11 +92,10 @@ class GauntTensorProduct(nn.Module):
     res_beta: int = 20
     num_channels: int = FLAGS.num_channels_for_gaunt_TP
     quadrature: str = "gausslegendre"
+    use_from_s2grid_direct: bool = FLAGS.use_from_s2grid_direct_in_gaunt_TP
 
     @nn.compact
     def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-        lmax = x.irreps.lmax + y.irreps.lmax
-
         xc = e3nn.flax.Linear(
             e3nn.s2_irreps(x.irreps.lmax, p_val=self.p_val1, p_arg=-1)
             * self.num_channels,
@@ -106,7 +121,7 @@ class GauntTensorProduct(nn.Module):
             quadrature=self.quadrature,
             p_val=self.p_val1,
             p_arg=-1,
-            fft=False
+            fft=False,
         )
         yc = e3nn.to_s2grid(
             yc,
@@ -115,12 +130,26 @@ class GauntTensorProduct(nn.Module):
             quadrature=self.quadrature,
             p_val=self.p_val2,
             p_arg=-1,
-            fft=False
+            fft=False,
         )
-        zc = e3nn.from_s2grid(
-            xc * yc, irreps=e3nn.s2_irreps(lmax, p_val=self.p_val1 * self.p_val2),
-            fft=False
-        )
+        if self.use_from_s2grid_direct:
+            zc = jax.vmap(
+                jax.vmap(
+                    lambda prod: from_s2grid_direct(
+                        prod,
+                        lmax=x.irreps.lmax + y.irreps.lmax,
+                        p_val=self.p_val1 * self.p_val2,
+                    )
+                )
+            )(xc * yc)
+        else:
+            zc = e3nn.from_s2grid(
+                xc * yc,
+                irreps=e3nn.s2_irreps(
+                    x.irreps.lmax + y.irreps.lmax, p_val=self.p_val1 * self.p_val2
+                ),
+                fft=False,
+            )
         zc = zc.axis_to_mul()
         zc = e3nn.flax.Linear(zc.irreps, name="linear_out_z")(zc)
         return zc
@@ -227,6 +256,30 @@ class Model(nn.Module):
         return logits
 
 
+def from_s2grid_direct(x, lmax, p_val):
+    """Convert a grid of spherical harmonics to a vector of coefficients."""
+
+    def get_clm(l: int, m: int) -> jnp.ndarray:
+        Ylm_coeffs = jnp.zeros(2 * l + 1).at[m + l].set(1)
+        Ylm = e3nn.IrrepsArray(e3nn.Irrep(l, (-1) ** (l)), Ylm_coeffs)
+        Ylm_sig = e3nn.to_s2grid(
+            Ylm,
+            res_beta=x.res_beta,
+            res_alpha=x.res_alpha,
+            quadrature=x.quadrature,
+            p_val=1,
+            p_arg=-1,
+        )
+        return (x * Ylm_sig).integrate().array[-1] / (4 * jnp.pi)
+
+    coeffs = []
+    for l in range(lmax + 1):
+        cl = jnp.asarray([get_clm(l, m) for m in range(-l, l + 1)])
+        cl = e3nn.IrrepsArray(e3nn.Irrep(l, ((-1) ** (l)) * p_val), cl)
+        coeffs.append(cl)
+    return e3nn.concatenate(coeffs)
+
+
 def get_tetris_dataset() -> jraph.GraphsTuple:
     pos = [
         [[0, 0, 0], [0, 0, 1], [1, 0, 0], [1, 1, 0]],  # chiral_shape_1
@@ -309,7 +362,8 @@ def train():
         for step in bar:
             if FLAGS.profile and step == 20:
                 from ctypes import cdll
-                libcudart = cdll.LoadLibrary('libcudart.so')
+
+                libcudart = cdll.LoadLibrary("libcudart.so")
                 libcudart.cudaProfilerStart()
             params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
 
@@ -319,7 +373,9 @@ def train():
             if accuracy == 1.0:
                 break
 
-    print(f"Training for {FLAGS.tensor_product_type} LMAX {FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s")
+    print(
+        f"Training for {FLAGS.tensor_product_type} LMAX {FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s"
+    )
     print(f"Final accuracy = {100 * accuracy:.2f}%")
     print("Final prediction:", preds)
 
