@@ -223,13 +223,6 @@ class VSHCoeffs(dict):
         return coeffs
 
 
-def _wrap_fn_for_vector_signal(fn):
-    """vmaps a fn over res_beta and res_alpha axes."""
-    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
-    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
-    return fn
-
-
 def get_vsh_coeffs_at_mj(
     sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
 ) -> float:
@@ -285,6 +278,14 @@ def get_vsh_coeffs_at_j(
         VSHCoeffs.get_vsh_irrep(j_out, l_out, parity_out), computed_coeffs
     )
     return computed_coeffs
+
+
+
+def _wrap_fn_for_vector_signal(fn):
+    """vmaps a fn over res_beta and res_alpha axes."""
+    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
+    fn = jax.vmap(fn, in_axes=-1, out_axes=-1)
+    return fn
 
 
 def cross_product(

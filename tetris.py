@@ -1,5 +1,7 @@
 import time
+import sys
 
+from absl import app, flags
 import flax
 import flax.linen as nn
 import jax
@@ -10,8 +12,17 @@ from tqdm.auto import tqdm
 
 import e3nn_jax as e3nn
 
-from vector_spherical_harmonics import VSHCoeffs, get_vsh_irreps, cross_product
+from vector_spherical_harmonics import VSHCoeffs
 
+flags.DEFINE_integer("num_steps", 1000, "Number of training steps")
+flags.DEFINE_integer("num_layers", 2, "Number of layers in the network")
+flags.DEFINE_integer("hidden_lmax", 3, "Hidden layer lmax")
+flags.DEFINE_integer("sh_lmax", 3, "Spherical harmonics lmax")
+flags.DEFINE_integer("multiplicity", 8, "Multiplicity")
+flags.DEFINE_integer("num_channels_for_gaunt_TP", 1, "Number of channels for Gaunt tensor product")
+flags.DEFINE_enum("tensor_product_type", "vectorgaunt", ["usual", "gaunt", "vectorgaunt"], "Type of tensor product")
+FLAGS = flags.FLAGS
+FLAGS(sys.argv)
 
 class VectorGauntTensorProduct(nn.Module):
 
@@ -19,7 +30,7 @@ class VectorGauntTensorProduct(nn.Module):
     p_val2: int
     res_alpha: int = 19
     res_beta: int = 20
-    num_channels: int = 1
+    num_channels: int = FLAGS.num_channels_for_gaunt_TP
     quadrature: str = "gausslegendre"
 
     @nn.compact
@@ -27,48 +38,31 @@ class VectorGauntTensorProduct(nn.Module):
         lmax = x.irreps.lmax + y.irreps.lmax
 
         xc = e3nn.flax.Linear(
-            get_vsh_irreps(x.irreps.lmax, parity=self.p_val1) * self.num_channels,
+            VSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in_x",
         )(x)
         xc = xc.mul_to_axis(self.num_channels)
 
         yc = e3nn.flax.Linear(
-            get_vsh_irreps(y.irreps.lmax, parity=self.p_val2) * self.num_channels,
+            VSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2) * self.num_channels,
             force_irreps_out=True,
             name="linear_in_y",
         )(y)
         yc = yc.mul_to_axis(self.num_channels)
 
-        # print(xc.shape, xc.irreps)
-        # print(yc.shape, yc.irreps)
-
         def cross_product_per_channel_per_sample(xc, yc):
-            xc = VSHCoeffs.from_irreps_array(xc).to_vector_signal(
-                res_beta=self.res_beta,
-                res_alpha=self.res_alpha,
-                quadrature=self.quadrature,
+            xc = VSHCoeffs.from_irreps_array(xc)
+            yc = VSHCoeffs.from_irreps_array(yc)
+            zc = xc.reduce_pointwise_cross_product(
+                yc, res_beta=self.res_beta, res_alpha=self.res_alpha, quadrature=self.quadrature
             )
-            yc = VSHCoeffs.from_irreps_array(yc).to_vector_signal(
-                res_beta=self.res_beta,
-                res_alpha=self.res_alpha,
-                quadrature=self.quadrature,
-            )
-            zc = cross_product(
-                xc,
-                yc,
-            )
-
-            zc = VSHCoeffs.from_vector_signal(
-                zc, lmax=lmax, parity=self.p_val1 * self.p_val2
-            ).to_irreps_array()
+            zc = zc.to_irreps_array()
             return zc
 
         zc = jax.vmap(jax.vmap(cross_product_per_channel_per_sample))(xc, yc)
         zc = zc.axis_to_mul()
-        zc = e3nn.flax.Linear(zc.irreps, force_irreps_out=True, name="linear_out_z")(zc)
-        # print(zc.shape, zc.irreps)
-        # print()
+        zc = e3nn.flax.Linear(zc.irreps, name="linear_out_z")(zc)
         return zc
 
 
@@ -78,7 +72,7 @@ class GauntTensorProduct(nn.Module):
     p_val2: int
     res_alpha: int = 19
     res_beta: int = 20
-    num_channels: int = 1
+    num_channels: int = FLAGS.num_channels_for_gaunt_TP
     quadrature: str = "gausslegendre"
 
     @nn.compact
@@ -123,9 +117,7 @@ class GauntTensorProduct(nn.Module):
             xc * yc, irreps=e3nn.s2_irreps(lmax, p_val=self.p_val1 * self.p_val2)
         )
         zc = zc.axis_to_mul()
-        zc = e3nn.flax.Linear(zc.irreps, force_irreps_out=True, name="linear_out_z")(zc)
-        # print(zc.irreps)
-        # print()
+        zc = e3nn.flax.Linear(zc.irreps, name="linear_out_z")(zc)
         return zc
 
 
@@ -137,10 +129,11 @@ class TensorProduct(nn.Module):
 
 
 class Layer(nn.Module):
+
     target_irreps: e3nn.Irreps
-    denominator: float
     sh_lmax: int
-    tensor_product_type = "vectorgaunt"
+    denominator: float = 1.5
+    tensor_product_type = FLAGS.tensor_product_type
 
     @nn.compact
     def __call__(self, graphs, positions):
@@ -183,7 +176,7 @@ class Layer(nn.Module):
             node_feats = e3nn.flax.Linear(target_irreps, name="linear_pre")(node_feats)
             node_feats = e3nn.scalar_activation(node_feats)
             node_feats = e3nn.flax.Linear(
-                target_irreps, name="linear_post", force_irreps_out=True
+                target_irreps, name="linear_post", force_irreps_out=False
             )(node_feats)
             shortcut = e3nn.flax.Linear(
                 node_feats.irreps, name="shortcut", force_irreps_out=True
@@ -194,14 +187,26 @@ class Layer(nn.Module):
 
 
 class Model(nn.Module):
+
+    num_layers: int = FLAGS.num_layers
+    hidden_lmax: int = FLAGS.hidden_lmax
+    sh_lmax: int = FLAGS.sh_lmax
+    multiplicity: int = FLAGS.multiplicity
+
     @nn.compact
     def __call__(self, graphs):
         positions = e3nn.IrrepsArray("1o", graphs.nodes)
         graphs = graphs._replace(nodes=jnp.ones((len(positions), 1)))
 
-        layers = 2 * ["32x0e + 32x0o + 8x1e + 8x1o + 8x2e + 8x2o"] + ["0o + 7x0e"]
-        for irreps in layers:
-            graphs = Layer(irreps, denominator=1.5, sh_lmax=3)(graphs, positions)
+        layer_irreps = 4 * (e3nn.Irreps("0e") + e3nn.Irreps("0o"))
+        layer_irreps += e3nn.s2_irreps(lmax=self.hidden_lmax, p_val=1, p_arg=-1)[1:]
+        layer_irreps += e3nn.s2_irreps(lmax=self.hidden_lmax, p_val=-1, p_arg=-1)[1:]
+        layer_irreps *= self.multiplicity
+        layer_irreps = layer_irreps.regroup()
+
+        for irreps in self.num_layers * [layer_irreps] + ["0o + 7x0e"]:
+            graphs = Layer(irreps, sh_lmax=self.sh_lmax)(graphs, positions)
+            print("Layer output:", graphs.nodes.irreps)
 
         # Readout logits
         pred = e3nn.scatter_sum(
@@ -251,7 +256,7 @@ def get_tetris_dataset() -> jraph.GraphsTuple:
     return jraph.batch(graphs)
 
 
-def train(steps=200):
+def train():
     model = Model()
 
     # Optimizer
@@ -295,7 +300,7 @@ def train(steps=200):
     # Train
     wall = time.perf_counter()
     print("Training...", flush=True)
-    with tqdm(range(steps)) as bar:
+    with tqdm(range(FLAGS.num_steps)) as bar:
         for step in bar:
             params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
 
