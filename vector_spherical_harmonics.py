@@ -17,23 +17,6 @@ def vsh_iterator(jmax: int):
             yield j, l
 
 
-def get_vsh_irrep(j: int, l: int, parity: int) -> e3nn.Irrep:
-    """Returns the irrep of a VSH."""
-    if parity == -1:
-        return e3nn.Irrep(j, (-1) ** (l + 1))
-    elif parity == 1:
-        return e3nn.Irrep(j, (-1) ** l)
-    raise ValueError(f"Invalid parity {parity}.")
-
-
-def get_vsh_irreps(jmax: int, parity: int) -> e3nn.Irreps:
-    """Returns the irreps for the VSH upto some jmax."""
-    irreps = []
-    for j, l in vsh_iterator(jmax):
-        ir = get_vsh_irrep(j, l, parity)
-        irreps.append(ir)
-    return e3nn.Irreps(irreps)
-
 
 def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
     """Returns the change of basis for each (j, l) pair."""
@@ -46,12 +29,13 @@ def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
             "ij",
             i=e3nn.Irrep(1, parity),
             j=e3nn.Irrep(l, (-1) ** (l)),
-            keep_ir=get_vsh_irrep(j, l, parity),
+            keep_ir=VSHCoeffs.get_vsh_irrep(j, l, parity),
         )
         rtps[(j, l)] = rtp
     return rtps
 
 
+@jax.tree_util.register_pytree_node_class
 class VSHCoeffs(dict):
     """Parity = -1 for VSH, parity = 1 for PVSH."""
 
@@ -69,7 +53,7 @@ class VSHCoeffs(dict):
         mul, ir = value.irreps[0]
         assert l - 1 <= j <= l + 1, f"Invalid j={j} for VSH {j, l}."
         assert mul == 1, f"Invalid multiplicity {mul} for VSH {j, l}."
-        assert ir == get_vsh_irrep(
+        assert ir == VSHCoeffs.get_vsh_irrep(
             j, l, self.parity
         ), f"Invalid irrep {ir} for VSH {j, l} with parity {self.parity}."
         super().__setitem__(key, value)
@@ -82,6 +66,24 @@ class VSHCoeffs(dict):
         """Converts a dictionary of VSH coefficients to an IrrepsArray."""
         return e3nn.concatenate([v for v in self.values()])
 
+    @staticmethod
+    def get_vsh_irrep(j: int, l: int, parity: int) -> e3nn.Irrep:
+        """Returns the irrep of a VSH."""
+        if parity == -1:
+            return e3nn.Irrep(j, (-1) ** (l + 1))
+        elif parity == 1:
+            return e3nn.Irrep(j, (-1) ** l)
+        raise ValueError(f"Invalid parity {parity}.")
+
+    @staticmethod
+    def get_vsh_irreps(jmax: int, parity: int) -> e3nn.Irreps:
+        """Returns the irreps for the VSH upto some jmax."""
+        irreps = []
+        for j, l in vsh_iterator(jmax):
+            ir = VSHCoeffs.get_vsh_irrep(j, l, parity)
+            irreps.append(ir)
+        return e3nn.Irreps(irreps)
+
     @classmethod
     def from_irreps_array(cls, irreps_array: e3nn.IrrepsArray) -> "VSHCoeffs":
         """Converts an IrrepsArray to a dictionary of VSH coefficients."""
@@ -90,7 +92,7 @@ class VSHCoeffs(dict):
         jmax = irreps_array.irreps.lmax
         detected_parity = None
         for parity in [1, -1]:
-            if get_vsh_irreps(jmax, parity) == irreps_array.irreps:
+            if VSHCoeffs.get_vsh_irreps(jmax, parity) == irreps_array.irreps:
                 detected_parity = parity
                 break
 
@@ -122,7 +124,7 @@ class VSHCoeffs(dict):
         """Creates a dictionary of all-zeros coefficients for each VSH."""
         coeffs = cls(parity=parity)
         for j, l in vsh_iterator(jmax):
-            ir = get_vsh_irrep(j, l, parity)
+            ir = VSHCoeffs.get_vsh_irrep(j, l, parity)
             coeffs[(j, l)] = e3nn.zeros(ir)
         return coeffs
 
@@ -131,7 +133,7 @@ class VSHCoeffs(dict):
         """Creates a dictionary of all-zeros coefficients for each VSH."""
         coeffs = cls(parity=parity)
         for j, l in vsh_iterator(jmax):
-            ir = get_vsh_irrep(j, l, parity)
+            ir = VSHCoeffs.get_vsh_irrep(j, l, parity)
             coeffs[(j, l)] = e3nn.normal(ir, key)
             key, _ = jax.random.split(key)
         return coeffs
@@ -169,7 +171,9 @@ class VSHCoeffs(dict):
         )
         return vector_sig
 
+    @classmethod
     def from_vector_signal(
+        cls,
         sig: e3nn.SphericalSignal, lmax: int, parity: int
     ) -> "VSHCoeffs":
         return get_vsh_coeffs(sig, lmax=lmax, parity=parity)
@@ -196,12 +200,30 @@ class VSHCoeffs(dict):
             raise ValueError(f"Invalid mj={mj} for j={j}.")
 
         coeffs = e3nn.IrrepsArray(
-            get_vsh_irrep(j, l, parity),
+            VSHCoeffs.get_vsh_irrep(j, l, parity),
             jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)]),
         )
         coeffs_dict = cls(parity=parity)
         coeffs_dict[(j, l)] = coeffs
         return coeffs_dict
+
+    def pointwise_cross_product(self, other: "VSHCoeffs", res_beta: int, res_alpha: int, quadrature: str) -> "VSHCoeffs":
+        """Computes the pointwise cross product on the sphere, and converts back to VSH coefficients."""
+        self_sig = self.to_vector_signal(res_beta, res_alpha, quadrature)
+        other_sig = other.to_vector_signal(res_beta, res_alpha, quadrature)
+        cross_sig = cross_product(self_sig, other_sig)
+        return VSHCoeffs.from_vector_signal(cross_sig, lmax=self.get_jmax() + other.get_jmax(), parity=self.parity * other.parity)
+    
+    def tree_flatten(self):
+        return list(self.values()), (self.keys(), self.parity)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        keys, parity = aux_data
+        values = children
+        coeffs = cls(parity=parity)
+        coeffs.update(zip(keys, values))
+        return coeffs
 
 
 def _wrap_fn_for_vector_signal(fn):
@@ -240,7 +262,7 @@ def get_vsh_coeffs_at_j(
         ]
     )
     computed_coeffs = e3nn.IrrepsArray(
-        get_vsh_irrep(j_out, l_out, parity_out), computed_coeffs
+        VSHCoeffs.get_vsh_irrep(j_out, l_out, parity_out), computed_coeffs
     )
     return computed_coeffs
 
