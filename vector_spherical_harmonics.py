@@ -141,6 +141,7 @@ class VSHCoeffs(dict):
             quadrature=quadrature,
             p_val=1,
             p_arg=-1,
+            fft=False
         )
         return vector_sig
 
@@ -209,6 +210,7 @@ class VSHCoeffs(dict):
         return e3nn.from_s2grid(
             dot_sig,
             irreps=e3nn.s2_irreps(self.jmax() + other.jmax()),
+            fft=False
         )
 
     def tree_flatten(self):

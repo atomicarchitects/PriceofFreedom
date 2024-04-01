@@ -1,3 +1,4 @@
+
 import time
 import sys
 
@@ -21,6 +22,7 @@ flags.DEFINE_integer("sh_lmax", 3, "Spherical harmonics lmax")
 flags.DEFINE_integer("multiplicity", 8, "Multiplicity")
 flags.DEFINE_integer("num_channels_for_gaunt_TP", 1, "Number of channels for Gaunt tensor product")
 flags.DEFINE_enum("tensor_product_type", "vectorgaunt", ["usual", "gaunt", "vectorgaunt"], "Type of tensor product")
+flags.DEFINE_bool("profile", False, "Enable profiling")
 FLAGS = flags.FLAGS
 FLAGS(sys.argv)
 
@@ -104,6 +106,7 @@ class GauntTensorProduct(nn.Module):
             quadrature=self.quadrature,
             p_val=self.p_val1,
             p_arg=-1,
+            fft=False
         )
         yc = e3nn.to_s2grid(
             yc,
@@ -112,9 +115,11 @@ class GauntTensorProduct(nn.Module):
             quadrature=self.quadrature,
             p_val=self.p_val2,
             p_arg=-1,
+            fft=False
         )
         zc = e3nn.from_s2grid(
-            xc * yc, irreps=e3nn.s2_irreps(lmax, p_val=self.p_val1 * self.p_val2)
+            xc * yc, irreps=e3nn.s2_irreps(lmax, p_val=self.p_val1 * self.p_val2),
+            fft=False
         )
         zc = zc.axis_to_mul()
         zc = e3nn.flax.Linear(zc.irreps, name="linear_out_z")(zc)
@@ -302,12 +307,19 @@ def train():
     print("Training...", flush=True)
     with tqdm(range(FLAGS.num_steps)) as bar:
         for step in bar:
+            if FLAGS.profile and step == 20:
+                from ctypes import cdll
+                libcudart = cdll.LoadLibrary('libcudart.so')
+                libcudart.cudaProfilerStart()
             params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
 
+            if FLAGS.profile and step == 25:
+                libcudart.cudaProfilerStop()
             bar.set_postfix(accuracy=f"{100 * accuracy:.2f}%")
             if accuracy == 1.0:
                 break
 
+    print(f"Training for {FLAGS.tensor_product_type} LMAX {FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s")
     print(f"Final accuracy = {100 * accuracy:.2f}%")
     print("Final prediction:", preds)
 
