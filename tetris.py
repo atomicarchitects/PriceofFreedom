@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 import e3nn_jax as e3nn
 
 from vector_spherical_harmonics import VSHCoeffs
+from simpler_vsh import SimpleVSHCoeffs
 
 flags.DEFINE_integer("num_steps", 1000, "Number of training steps")
 flags.DEFINE_integer("num_layers", 2, "Number of layers in the network")
@@ -49,9 +50,8 @@ class VectorGauntTensorProduct(nn.Module):
 
     @nn.compact
     def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-
         xc = e3nn.flax.Linear(
-            VSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1)
+            SimpleVSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1)
             * self.num_channels,
             force_irreps_out=True,
             name="linear_in_x",
@@ -59,7 +59,7 @@ class VectorGauntTensorProduct(nn.Module):
         xc = xc.mul_to_axis(self.num_channels)
 
         yc = e3nn.flax.Linear(
-            VSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2)
+            SimpleVSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2)
             * self.num_channels,
             force_irreps_out=True,
             name="linear_in_y",
@@ -67,8 +67,8 @@ class VectorGauntTensorProduct(nn.Module):
         yc = yc.mul_to_axis(self.num_channels)
 
         def cross_product_per_channel_per_sample(xc, yc):
-            xc = VSHCoeffs.from_irreps_array(xc)
-            yc = VSHCoeffs.from_irreps_array(yc)
+            xc = SimpleVSHCoeffs(xc, parity=self.p_val1)
+            yc = SimpleVSHCoeffs(yc, parity=self.p_val2)
             zc = xc.reduce_pointwise_cross_product(
                 yc,
                 res_beta=self.res_beta,
@@ -175,7 +175,7 @@ class Layer(nn.Module):
 
         def update_edge_fn(edge_features, sender_features, receiver_features, globals):
             sh = e3nn.spherical_harmonics(
-                e3nn.s2_irreps(self.sh_lmax)[1:],
+                e3nn.s2_irreps(self.sh_lmax),
                 positions[graphs.receivers] - positions[graphs.senders],
                 True,
             )
@@ -362,19 +362,20 @@ def train():
         for step in bar:
             if FLAGS.profile and step == 20:
                 from ctypes import cdll
-
                 libcudart = cdll.LoadLibrary("libcudart.so")
                 libcudart.cudaProfilerStart()
+            
             params, opt_state, accuracy, preds = update_fn(params, opt_state, graphs)
 
             if FLAGS.profile and step == 25:
                 libcudart.cudaProfilerStop()
+            
             bar.set_postfix(accuracy=f"{100 * accuracy:.2f}%")
             if accuracy == 1.0:
                 break
 
     print(
-        f"Training for {FLAGS.tensor_product_type} LMAX {FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s"
+        f"Training for tensor_product_type={FLAGS.tensor_product_type} with lmax={FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s"
     )
     print(f"Final accuracy = {100 * accuracy:.2f}%")
     print("Final prediction:", preds)

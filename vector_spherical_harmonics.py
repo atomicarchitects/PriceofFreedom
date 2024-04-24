@@ -26,7 +26,7 @@ class VSHCoeffs(dict):
         mul, ir = value.irreps[0]
         assert l - 1 <= j <= l + 1, f"Invalid j={j} for VSH {j, l}."
         assert mul == 1, f"Invalid multiplicity {mul} for VSH {j, l}."
-        assert ir == VSHCoeffs.get_vsh_irrep(
+        assert ir == self.get_vsh_irrep(
             j, l, self.parity
         ), f"Invalid irrep {ir} for VSH {j, l} with parity {self.parity}."
         super().__setitem__(key, value)
@@ -65,7 +65,7 @@ class VSHCoeffs(dict):
         jmax = irreps_array.irreps.lmax
         detected_parity = None
         for parity in [1, -1]:
-            if VSHCoeffs.get_vsh_irreps(jmax, parity) == irreps_array.irreps:
+            if cls.get_vsh_irreps(jmax, parity) == irreps_array.irreps:
                 detected_parity = parity
                 break
 
@@ -97,7 +97,7 @@ class VSHCoeffs(dict):
         """Creates a dictionary of all-zeros coefficients for each VSH."""
         coeffs = cls(parity=parity)
         for j, l in vsh_iterator(jmax):
-            ir = VSHCoeffs.get_vsh_irrep(j, l, parity)
+            ir = cls.get_vsh_irrep(j, l, parity)
             coeffs[(j, l)] = e3nn.zeros(ir)
         return coeffs
 
@@ -106,12 +106,12 @@ class VSHCoeffs(dict):
         """Creates a dictionary of all-zeros coefficients for each VSH."""
         coeffs = cls(parity=parity)
         for j, l in vsh_iterator(jmax):
-            ir = VSHCoeffs.get_vsh_irrep(j, l, parity)
+            ir = cls.get_vsh_irrep(j, l, parity)
             coeffs[(j, l)] = e3nn.normal(ir, key)
             key, _ = jax.random.split(key)
         return coeffs
 
-    def to_vector_coeffs(self) -> e3nn.IrrepsArray:
+    def to_xyz_coeffs(self) -> e3nn.IrrepsArray:
         """Converts a dictionary of VSH coefficients to a 3D IrrepsArray."""
         rtps = get_change_of_basis_matrices(jmax=self.jmax(), parity=self.parity)
         all_vector_coeffs = []
@@ -180,7 +180,7 @@ class VSHCoeffs(dict):
             raise ValueError(f"Invalid mj={mj} for j={j}.")
 
         coeffs = e3nn.IrrepsArray(
-            VSHCoeffs.get_vsh_irrep(j, l, parity),
+            cls.get_vsh_irrep(j, l, parity),
             jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)]),
         )
         coeffs_dict = cls(parity=parity)
@@ -225,17 +225,6 @@ class VSHCoeffs(dict):
         return coeffs
 
 
-def get_vsh_coeffs_at_mj(
-    sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
-) -> float:
-    """Returns the component of Y_{j_out, l_out, mj_out} in the signal sig."""
-    vsh_coeff = VSHCoeffs.vector_spherical_harmonics(j_out, l_out, mj_out)
-    vsh_signal = vsh_coeff.to_vector_signal(
-        res_beta=sig.res_beta, res_alpha=sig.res_alpha, quadrature=sig.quadrature
-    )
-    sig_vsh_dot_product = dot_product(sig, vsh_signal)
-    return sig_vsh_dot_product.integrate().array[-1] / (4 * jnp.pi)
-
 
 def vsh_iterator(jmax: int):
     """Iterates over all VSH up to some jmax."""
@@ -261,6 +250,18 @@ def get_change_of_basis_matrices(jmax: int, parity: int) -> jnp.ndarray:
         )
         rtps[(j, l)] = rtp
     return rtps
+
+
+def get_vsh_coeffs_at_mj(
+    sig: e3nn.SphericalSignal, j_out: int, l_out: int, mj_out: int
+) -> float:
+    """Returns the component of Y_{j_out, l_out, mj_out} in the signal sig."""
+    vsh_coeff = VSHCoeffs.vector_spherical_harmonics(j_out, l_out, mj_out)
+    vsh_signal = vsh_coeff.to_vector_signal(
+        res_beta=sig.res_beta, res_alpha=sig.res_alpha, quadrature=sig.quadrature
+    )
+    sig_vsh_dot_product = dot_product(sig, vsh_signal)
+    return sig_vsh_dot_product.integrate().array[-1] / (4 * jnp.pi)
 
 
 def get_vsh_coeffs_at_j(
