@@ -108,6 +108,7 @@ def train_and_evaluate(config, workdir):
     # Create the model.
     model = create_model(config)
     params = model.init(jax.random.PRNGKey(0), graphs=next(datasets["train"]))
+    apply_fn = jax.jit(model.apply)
 
     # Optimizer
     tx = create_optimizer(config)
@@ -118,7 +119,7 @@ def train_and_evaluate(config, workdir):
         params: optax.Params, graphs: jraph.GraphsTuple
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """A simple mean squared error loss."""
-        preds = model.apply(params, graphs)
+        preds = apply_fn(params, graphs)
         labels = graphs.globals
         assert preds.shape == labels.shape, (preds.shape, labels.shape)
         loss = (preds - labels) ** 2
@@ -137,7 +138,7 @@ def train_and_evaluate(config, workdir):
 
     def evaluate(params, dataset, num_steps):
         total_loss = 0.0
-        for _ in range(num_steps):
+        for _ in tqdm.trange(num_steps, desc="Validation"):
             graphs = next(dataset)
             loss, _ = loss_fn(params, graphs)
             total_loss += loss
