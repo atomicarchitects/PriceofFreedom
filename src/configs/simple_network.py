@@ -20,7 +20,7 @@ def get_config():
     config.dataset_seed = 0
     config.root = "data"
     config.target_property = "mu"
-    config.radial_cutoff = 3.0
+    config.radial_cutoff = 2.0
     config.add_self_edges = True
     config.num_train_molecules = 110000
     config.num_val_molecules = 10000
