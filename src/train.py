@@ -140,6 +140,7 @@ def train_and_evaluate(config, workdir):
         total_loss = 0.0
         for _ in tqdm.trange(num_steps, desc="Validation"):
             graphs = next(dataset)
+            graphs = jax.tree_map(jnp.asarray, graphs)
             loss, _ = loss_fn(params, graphs)
             total_loss += loss
         return total_loss / num_steps
@@ -148,6 +149,7 @@ def train_and_evaluate(config, workdir):
     with tqdm.tqdm(range(config.num_training_steps)) as bar:
         for step in bar:
             graphs = next(datasets["train"])
+            graphs = jax.tree_map(jnp.asarray, graphs)
             params, opt_state, loss, _ = update_fn(params, opt_state, graphs)
 
             bar.set_postfix(loss=f"{loss:.2f}")
