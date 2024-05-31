@@ -31,6 +31,6 @@ def get_config():
 
     # Evaluation configuration.
     config.evaluate_every = 10000
-    config.num_eval_steps = 1000
+    config.num_eval_steps = 100
 
     return config
