@@ -1,0 +1,12 @@
+--find-links https://storage.googleapis.com/jax-releases/jax_releases.html
+
+absl-py
+torch-geometric
+rdkit
+jax[cuda12]
+e3nn_jax
+flax
+optax
+jraph
+ml_collections
+wandb

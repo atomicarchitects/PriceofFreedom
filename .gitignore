@@ -1,3 +1,5 @@
 .venv
 .DS_Store
 __pycache__/
+workdirs
+data
