@@ -14,6 +14,7 @@ import jraph
 import ml_collections
 import wandb
 
+
 from src.data.qm9 import QM9Dataset
 from src import models
 from src import tensor_products
@@ -106,9 +107,16 @@ def train_and_evaluate(config, workdir):
     datasets = get_datasets(config)
 
     # Create the model.
+    rng = jax.random.PRNGKey(0)
+    init_rng, rng = jax.random.split(rng)
     model = create_model(config)
-    params = model.init(jax.random.PRNGKey(0), graphs=next(datasets["train"]))
+    init_graphs = next(datasets["train"])
+    params = model.init(init_rng, graphs=init_graphs)
     apply_fn = jax.jit(model.apply)
+
+    # Tabulate the model.
+    logging.info(f"Parameter shapes: {jax.tree_map(lambda x: x.shape, params)}")
+    logging.info(f"Total parameters: {sum(jax.tree_leaves(jax.tree_map(lambda x: x.size, params)))}")
 
     # Optimizer
     tx = create_optimizer(config)
