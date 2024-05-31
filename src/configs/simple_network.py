@@ -11,8 +11,8 @@ def get_config():
     config.sh_lmax = 2
     config.lmax = 2
     config.init_node_features = 16
-    config.max_atomic_number = 100
-    config.num_hops = 3
+    config.max_atomic_number = 10
+    config.num_hops = 1
     config.tensor_product = "cgtp_naive"
 
     # Training configuration.
