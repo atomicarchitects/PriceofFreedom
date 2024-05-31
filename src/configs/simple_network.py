@@ -12,7 +12,7 @@ def get_config():
     config.lmax = 2
     config.init_node_features = 16
     config.max_atomic_number = 10
-    config.num_hops = 1
+    config.num_hops = 3
     config.tensor_product = "cgtp_naive"
 
     # Training configuration.
