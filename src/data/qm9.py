@@ -149,7 +149,7 @@ class QM9Dataset(torch.utils.data.Dataset):
             pre_transform=utils.add_edges_transform(
                 radial_cutoff=radial_cutoff, add_self_edges=add_self_edges
             ),
-            force_reload=True,
+            force_reload=False,
         )
         self.datasets = utils.split_dataset(dataset, splits, seed)
 
