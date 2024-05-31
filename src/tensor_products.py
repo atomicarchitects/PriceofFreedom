@@ -8,7 +8,9 @@ import flax.linen as nn
 from src.vector_spherical_harmonics import VSHCoeffs
 
 
-def _prepare_inputs(input1: jnp.ndarray, input2: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[int, ...]]:
+def _prepare_inputs(
+    input1: jnp.ndarray, input2: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[int, ...]]:
     """Broadcasts the inputs to a common shape."""
     input1 = e3nn.as_irreps_array(input1)
     input2 = e3nn.as_irreps_array(input2)
@@ -19,7 +21,9 @@ def _prepare_inputs(input1: jnp.ndarray, input2: jnp.ndarray) -> Tuple[jnp.ndarr
     return input1, input2, leading_shape
 
 
-def _validate_filter_ir_out(filter_ir_out: Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]):
+def _validate_filter_ir_out(
+    filter_ir_out: Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]
+):
     """Validates the filter_ir_out argument."""
     if filter_ir_out is not None:
         if isinstance(filter_ir_out, str):
@@ -32,6 +36,10 @@ def _validate_filter_ir_out(filter_ir_out: Union[str, e3nn.Irrep, Sequence[e3nn.
 
 class TensorProductNaive(nn.Module):
 
+    irrep_normalization: str
+    output_linear: bool
+
+    @nn.compact
     def __call__(
         self,
         input1: e3nn.IrrepsArray,
@@ -54,10 +62,13 @@ class TensorProductNaive(nn.Module):
 
                     if x1 is not None and x2 is not None:
                         cg_coeff = e3nn.clebsch_gordan(ir_1.l, ir_2.l, ir_out.l)
-                        cg_coeff = cg_coeff * jnp.sqrt(ir_1.dim * ir_2.dim)
-
                         cg_coeff = cg_coeff.astype(x1.dtype)
-                        chunk = jnp.einsum("...ui, ...vj, ijk -> ...uvk", x1, x2, cg_coeff)
+                        if self.irrep_normalization == "norm":
+                            cg_coeff *= jnp.sqrt(ir_1.dim * ir_2.dim)
+
+                        chunk = jnp.einsum(
+                            "...ui, ...vj, ijk -> ...uvk", x1, x2, cg_coeff
+                        )
                         chunk = jnp.reshape(
                             chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim)
                         )
@@ -68,10 +79,17 @@ class TensorProductNaive(nn.Module):
 
         output = e3nn.from_chunks(irreps_out, chunks, leading_shape, input1.dtype)
         output = output.sort()
+
+        if self.output_linear:
+            output = e3nn.flax.Linear(output.irreps)(output)
+
         return output
 
 
 class TensorProductOptimized(nn.Module):
+
+    irrep_normalization: str
+    output_linear: bool
 
     def __call__(
         self,
@@ -115,8 +133,8 @@ class TensorProductOptimized(nn.Module):
                                     x2_t[l2 + m2, ...],
                                 )
                                 cg_coeff = cg[l1 + m1, l2 + m2, l3 + m3]
-                                # irrep normalization = "norm"
-                                cg_coeff *= jnp.sqrt(ir_1.dim * ir_2.dim)
+                                if self.irrep_normalization == "norm":
+                                    cg_coeff *= jnp.sqrt(ir_1.dim * ir_2.dim)
                                 path *= cg_coeff
                                 sum += path
                         chunk = chunk.at[l3 + m3].set(sum)
@@ -129,8 +147,11 @@ class TensorProductOptimized(nn.Module):
 
         output = e3nn.from_chunks(irreps_out, chunks, leading_shape, input1.dtype)
         output = output.sort()
+
+        if self.output_linear:
+            output = e3nn.flax.Linear(output.irreps)(output)
+
         return output
-    
 
 
 class GauntTensorProduct(nn.Module):
@@ -141,15 +162,35 @@ class GauntTensorProduct(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-        tp1 = GauntTensorProductFixedParity(p_val1=1, p_val2=1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
-        tp2 = GauntTensorProductFixedParity(p_val1=1, p_val2=-1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
-        tp3 = GauntTensorProductFixedParity(p_val1=-1, p_val2=1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
+    def __call__(
+        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
+    ) -> e3nn.IrrepsArray:
+        tp1 = GauntTensorProductFixedParity(
+            p_val1=1,
+            p_val2=1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
+        tp2 = GauntTensorProductFixedParity(
+            p_val1=1,
+            p_val2=-1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
+        tp3 = GauntTensorProductFixedParity(
+            p_val1=-1,
+            p_val2=1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
         return e3nn.concatenate([tp1, tp2, tp3])
 
 
 class GauntTensorProductFixedParity(nn.Module):
-        
+
     num_channels: int
     p_val1: int
     p_val2: int
@@ -158,7 +199,9 @@ class GauntTensorProductFixedParity(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
+    def __call__(
+        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
+    ) -> e3nn.IrrepsArray:
         input1c = e3nn.flax.Linear(
             e3nn.s2_irreps(input1.irreps.lmax, p_val=self.p_val1, p_arg=-1)
             * self.num_channels,
@@ -206,7 +249,6 @@ class GauntTensorProductFixedParity(nn.Module):
         return outputc
 
 
-
 class VectorGauntTensorProduct(nn.Module):
 
     num_channels: int
@@ -215,12 +257,31 @@ class VectorGauntTensorProduct(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-        tp1 = VectorGauntTensorProductFixedParity(p_val1=1, p_val2=1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
-        tp2 = VectorGauntTensorProductFixedParity(p_val1=1, p_val2=-1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
-        tp3 = VectorGauntTensorProductFixedParity(p_val1=-1, p_val2=1, res_alpha=self.res_alpha, res_beta=self.res_beta, quadrature=self.quadrature)(input1, input2)
+    def __call__(
+        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
+    ) -> e3nn.IrrepsArray:
+        tp1 = VectorGauntTensorProductFixedParity(
+            p_val1=1,
+            p_val2=1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
+        tp2 = VectorGauntTensorProductFixedParity(
+            p_val1=1,
+            p_val2=-1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
+        tp3 = VectorGauntTensorProductFixedParity(
+            p_val1=-1,
+            p_val2=1,
+            res_alpha=self.res_alpha,
+            res_beta=self.res_beta,
+            quadrature=self.quadrature,
+        )(input1, input2)
         return e3nn.concatenate([tp1, tp2, tp3])
-
 
 
 class VectorGauntTensorProductFixedParity(nn.Module):
@@ -233,7 +294,9 @@ class VectorGauntTensorProductFixedParity(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
+    def __call__(
+        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
+    ) -> e3nn.IrrepsArray:
         input1c = e3nn.flax.Linear(
             VSHCoeffs.get_vsh_irreps(input1.irreps.lmax, parity=self.p_val1)
             * self.num_channels,
@@ -247,7 +310,7 @@ class VectorGauntTensorProductFixedParity(nn.Module):
             * self.num_channels,
             force_irreps_out=True,
             name="linear_input2",
-        )(y)
+        )(input2)
         input2c = input2c.mul_to_axis(self.num_channels)
 
         def cross_product_per_channel_per_sample(input1c, input2c):
@@ -262,7 +325,9 @@ class VectorGauntTensorProductFixedParity(nn.Module):
             outputc = output_on_grid.to_irreps_array()
             return outputc
 
-        outputc = jax.vmap(jax.vmap(cross_product_per_channel_per_sample))(input1c, input2c)
+        outputc = jax.vmap(jax.vmap(cross_product_per_channel_per_sample))(
+            input1c, input2c
+        )
         outputc = outputc.axis_to_mul()
         outputc = e3nn.flax.Linear(outputc.irreps, name="linear_out_z")(outputc)
         return outputc

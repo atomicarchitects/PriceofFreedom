@@ -28,7 +28,7 @@ class VSHCoeffs:
     def get_vsh_irreps(jmax: int, parity: int) -> e3nn.Irreps:
         """Returns the irreps for the VSH upto some jmax."""
         return get_change_of_basis_matrix(jmax, parity).irreps
-    
+
     def __repr__(self):
         if self.parity == -1:
             vsh_type = "VSH Coefficients"
@@ -43,7 +43,7 @@ class VSHCoeffs:
     def zeros(cls, jmax: int, parity: int) -> "VSHCoeffs":
         """Creates a dictionary of all-zeros coefficients for each VSH."""
         return cls(e3nn.zeros(cls.get_vsh_irreps(jmax, parity)), parity=parity)
-    
+
     @classmethod
     def normal(cls, jmax: int, parity: int, key: chex.PRNGKey) -> "VSHCoeffs":
         """Creates a dictionary of all-zeros coefficients for each VSH."""
@@ -69,7 +69,7 @@ class VSHCoeffs:
             quadrature=quadrature,
             p_val=1,
             p_arg=-1,
-            fft=False
+            fft=False,
         )
         return vector_sig
 
@@ -79,14 +79,11 @@ class VSHCoeffs:
     ) -> "VSHCoeffs":
         """Returns the components of Y_{j_out, l_out, mj_out} in the signal sig for all mj_out in [-j_out, ..., j_out] and j_out in [-l_out, ..., l_out] and l_out upto lmax."""
         rtp = get_change_of_basis_matrix(jmax=jmax, parity=parity)
-        xyz_coeffs = e3nn.from_s2grid(
-            sig,
-            irreps=e3nn.s2_irreps(jmax),
-            fft=False
+        xyz_coeffs = e3nn.from_s2grid(sig, irreps=e3nn.s2_irreps(jmax), fft=False)
+        vsh_coeffs = e3nn.IrrepsArray(
+            rtp.irreps, jnp.einsum("ijk,ij->k", rtp.array, xyz_coeffs.array)
         )
-        vsh_coeffs = e3nn.IrrepsArray(rtp.irreps, jnp.einsum("ijk,ij->k", rtp.array, xyz_coeffs.array))
         return cls(vsh_coeffs, parity=parity)
-
 
     @classmethod
     def vector_spherical_harmonics(
@@ -99,7 +96,7 @@ class VSHCoeffs:
         if mj not in range(-j, j + 1):
             raise ValueError(f"Invalid mj={mj} for j={j}.")
 
-        irreps = e3nn.Irrep(j, (-1 ** l) * parity)
+        irreps = e3nn.Irrep(j, (-(1**l)) * parity)
         array = jnp.asarray([1.0 if i == mj else 0.0 for i in range(-j, j + 1)])
         irreps_array = e3nn.IrrepsArray(irreps, array)
         coeffs_dict = cls(irreps_array, parity=parity)
@@ -126,9 +123,7 @@ class VSHCoeffs:
         other_sig = other.to_vector_signal(res_beta, res_alpha, quadrature)
         dot_sig = dot_product(self_sig, other_sig)
         return e3nn.from_s2grid(
-            dot_sig,
-            irreps=e3nn.s2_irreps(self.jmax() + other.jmax()),
-            fft=False
+            dot_sig, irreps=e3nn.s2_irreps(self.jmax() + other.jmax()), fft=False
         )
 
     def filter(self, lmax: int) -> "VSHCoeffs":
@@ -142,6 +137,7 @@ class VSHCoeffs:
     def tree_unflatten(cls, aux_data, children):
         irreps_array, parity = aux_data
         return cls(irreps_array, parity=parity)
+
 
 def get_change_of_basis_matrix(jmax: int, parity: int) -> jnp.ndarray:
     """Returns the change of basis matrix."""
