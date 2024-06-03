@@ -1,7 +1,8 @@
 import time
 import sys
+import os
 
-from absl import app, flags
+from absl import flags
 import flax
 import flax.linen as nn
 import jax
@@ -9,16 +10,16 @@ import jax.numpy as jnp
 import jraph
 import optax
 from tqdm.auto import tqdm
-
+import wandb
 import e3nn_jax as e3nn
 
-from vector_spherical_harmonics import VSHCoeffs
-from simpler_vsh import SimpleVSHCoeffs
+from src import tensor_products
+from src.vector_spherical_harmonics import VSHCoeffs
 
-flags.DEFINE_integer("num_steps", 1000, "Number of training steps")
+flags.DEFINE_integer("num_steps", 300, "Number of training steps")
 flags.DEFINE_integer("num_layers", 2, "Number of layers in the network")
 flags.DEFINE_integer("hidden_lmax", 3, "Hidden layer lmax")
-flags.DEFINE_integer("sh_lmax", 3, "Spherical harmonics lmax")
+flags.DEFINE_integer("sh_lmax", 4, "Spherical harmonics lmax")
 flags.DEFINE_integer("multiplicity", 8, "Multiplicity")
 flags.DEFINE_integer(
     "num_channels_for_gaunt_TP", 1, "Number of channels for Gaunt tensor product"
@@ -30,8 +31,8 @@ flags.DEFINE_bool(
 )
 flags.DEFINE_enum(
     "tensor_product_type",
-    "vectorgaunt",
-    ["usual", "gaunt", "vectorgaunt"],
+    "clebsch-gordan",
+    ["clebsch-gordan", "gaunt"],
     "Type of tensor product",
 )
 flags.DEFINE_bool("profile", False, "Enable profiling")
@@ -51,7 +52,7 @@ class VectorGauntTensorProduct(nn.Module):
     @nn.compact
     def __call__(self, x: e3nn.IrrepsArray, y: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         xc = e3nn.flax.Linear(
-            SimpleVSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1)
+            VSHCoeffs.get_vsh_irreps(x.irreps.lmax, parity=self.p_val1)
             * self.num_channels,
             force_irreps_out=True,
             name="linear_in_x",
@@ -59,7 +60,7 @@ class VectorGauntTensorProduct(nn.Module):
         xc = xc.mul_to_axis(self.num_channels)
 
         yc = e3nn.flax.Linear(
-            SimpleVSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2)
+            VSHCoeffs.get_vsh_irreps(y.irreps.lmax, parity=self.p_val2)
             * self.num_channels,
             force_irreps_out=True,
             name="linear_in_y",
@@ -67,8 +68,8 @@ class VectorGauntTensorProduct(nn.Module):
         yc = yc.mul_to_axis(self.num_channels)
 
         def cross_product_per_channel_per_sample(xc, yc):
-            xc = SimpleVSHCoeffs(xc, parity=self.p_val1)
-            yc = SimpleVSHCoeffs(yc, parity=self.p_val2)
+            xc = VSHCoeffs(xc, parity=self.p_val1)
+            yc = VSHCoeffs(yc, parity=self.p_val2)
             zc = xc.reduce_pointwise_cross_product(
                 yc,
                 res_beta=self.res_beta,
@@ -181,7 +182,7 @@ class Layer(nn.Module):
             )
             sender_features = e3nn.as_irreps_array(sender_features)
 
-            if self.tensor_product_type == "usual":
+            if self.tensor_product_type == "clebsch-gordan":
                 tp = TensorProduct()(sender_features, sh)
 
             elif self.tensor_product_type == "gaunt":
@@ -205,17 +206,16 @@ class Layer(nn.Module):
 
             return e3nn.concatenate([sender_features, tp]).regroup()
 
-        def update_node_fn(node_features, sender_features, receiver_features, globals):
-            node_feats = receiver_features / self.denominator
-            node_feats = e3nn.flax.Linear(target_irreps, name="linear_pre")(node_feats)
-            node_feats = e3nn.scalar_activation(node_feats)
-            node_feats = e3nn.flax.Linear(
-                target_irreps, name="linear_post", force_irreps_out=False
-            )(node_feats)
+        def update_node_fn(curr_node_features, sender_features, receiver_features, globals):
+            print("Node features:", curr_node_features.irreps)
+            print("Sender features:", sender_features.irreps)
+            print("Receiver features:", receiver_features.irreps)
+            node_features = receiver_features / self.denominator
+            node_features = e3nn.flax.Linear(target_irreps, name="linear_post")(node_features)
             shortcut = e3nn.flax.Linear(
-                node_feats.irreps, name="shortcut", force_irreps_out=True
-            )(node_features)
-            return shortcut + node_feats
+                node_features.irreps, name="shortcut", force_irreps_out=True
+            )(curr_node_features)
+            return shortcut + node_features
 
         return jraph.GraphNetwork(update_edge_fn, update_node_fn)(graphs)
 
@@ -230,7 +230,7 @@ class Model(nn.Module):
     @nn.compact
     def __call__(self, graphs):
         positions = e3nn.IrrepsArray("1o", graphs.nodes)
-        graphs = graphs._replace(nodes=jnp.ones((len(positions), 1)))
+        graphs = graphs._replace(nodes=e3nn.IrrepsArray("0e", jnp.ones((len(positions), 1))))
 
         layer_irreps = 4 * (e3nn.Irreps("0e") + e3nn.Irreps("0o"))
         layer_irreps += e3nn.s2_irreps(lmax=self.hidden_lmax, p_val=1, p_arg=-1)[1:]
@@ -315,6 +315,7 @@ def get_tetris_dataset() -> jraph.GraphsTuple:
 
 
 def train():
+    # Model
     model = Model()
 
     # Optimizer
@@ -370,12 +371,13 @@ def train():
             if FLAGS.profile and step == 25:
                 libcudart.cudaProfilerStop()
             
+            if step % 5 == 0:
+                wandb.log({"accuracy": accuracy, "step": step})
+
             bar.set_postfix(accuracy=f"{100 * accuracy:.2f}%")
-            if accuracy == 1.0:
-                break
 
     print(
-        f"Training for tensor_product_type={FLAGS.tensor_product_type} with lmax={FLAGS.sh_lmax} took {time.perf_counter() - wall:.1f}s"
+        f"Training for tensor_product_type={FLAGS.tensor_product_type} with lmax={FLAGS.hidden_lmax} took {time.perf_counter() - wall:.1f}s"
     )
     print(f"Final accuracy = {100 * accuracy:.2f}%")
     print("Final prediction:", preds)
@@ -403,4 +405,23 @@ def train():
 
 
 if __name__ == "__main__":
+    os.makedirs(os.path.join("./wandb"), exist_ok=True)
+
+    wandb.login()
+    wandb.init(
+        project="price_of_freedom",
+        config={
+            "num_steps": FLAGS.num_steps,
+            "num_layers": FLAGS.num_layers,
+            "hidden_lmax": FLAGS.hidden_lmax,
+            "sh_lmax": FLAGS.sh_lmax,
+            "multiplicity": FLAGS.multiplicity,
+            "num_channels_for_gaunt_TP": FLAGS.num_channels_for_gaunt_TP,
+            "use_from_s2grid_direct_in_gaunt_TP": FLAGS.use_from_s2grid_direct_in_gaunt_TP,
+            "tensor_product_type": FLAGS.tensor_product_type,
+        },
+        dir="./wandb",
+        tags=["tetris", f"tensor-product={FLAGS.tensor_product_type}", f"hidden_lmax={FLAGS.hidden_lmax}", f"sh_lmax={FLAGS.sh_lmax}"],
+    )
+
     train()
