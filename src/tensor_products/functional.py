@@ -181,8 +181,8 @@ def gaunt_tensor_product_fourier_2D(
     output_lm = e3nn.IrrepsArray(
         e3nn.s2_irreps(lmax1 + lmax2),
         output_lm.real,
-    ).filter(filter_ir_out)
-    return output_lm
+    )
+    return output_lm.filter(filter_ir_out)
 
 
 def gaunt_tensor_product_s2grid(
