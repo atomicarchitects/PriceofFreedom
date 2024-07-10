@@ -1,4 +1,5 @@
 from typing import Tuple, Union, Sequence, Optional
+import jax
 import jax.numpy as jnp
 import e3nn_jax as e3nn
 
@@ -92,7 +93,13 @@ def clebsch_gordan_tensor_product_sparse(
     return output
 
 
-def clebsch_gordan_tensor_product_dense(input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray, *, filter_ir_out = Optional[Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]], irrep_normalization: Optional[str] = None) -> e3nn.IrrepsArray:
+def clebsch_gordan_tensor_product_dense(
+    input1: e3nn.IrrepsArray,
+    input2: e3nn.IrrepsArray,
+    *,
+    filter_ir_out=Optional[Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]],
+    irrep_normalization: Optional[str] = None,
+) -> e3nn.IrrepsArray:
     """Dense version of Clebsch-Gordan tensor product."""
     input1, input2, leading_shape = _prepare_inputs(input1, input2)
     filter_ir_out = _validate_filter_ir_out(filter_ir_out)
@@ -113,9 +120,7 @@ def clebsch_gordan_tensor_product_dense(input1: e3nn.IrrepsArray, input2: e3nn.I
                     if irrep_normalization == "norm":
                         cg_coeff *= jnp.sqrt(ir_1.dim * ir_2.dim)
 
-                    chunk = jnp.einsum(
-                        "...ui, ...vj, ijk -> ...uvk", x1, x2, cg_coeff
-                    )
+                    chunk = jnp.einsum("...ui, ...vj, ijk -> ...uvk", x1, x2, cg_coeff)
                     chunk = jnp.reshape(
                         chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim)
                     )
@@ -137,21 +142,27 @@ def gaunt_tensor_product_fourier_2D(
     res_theta: int,
     res_phi: int,
     convolution_type: str,
+    filter_ir_out=None,
 ) -> e3nn.IrrepsArray:
     """Gaunt tensor product using 2D Fourier functions."""
+    filter_ir_out = _validate_filter_ir_out(filter_ir_out)
+
     # Pad the inputs with zeros.
     lmax1 = input1.irreps.lmax
     if input1.irreps != e3nn.s2_irreps(lmax1):
         input1 = input1.extend_with_zeros(e3nn.s2_irreps(lmax1))
-    
+
     lmax2 = input2.irreps.lmax
     if input2.irreps != e3nn.s2_irreps(lmax2):
         input2 = input2.extend_with_zeros(e3nn.s2_irreps(lmax2))
 
-    # Precompute the change of basis matrices.
-    y1_grid = gtp_utils.compute_y_grid(lmax1, res_theta=res_theta, res_phi=res_phi)
-    y2_grid = gtp_utils.compute_y_grid(lmax2, res_theta=res_theta, res_phi=res_phi)
-    z_grid = gtp_utils.compute_z_grid(lmax1 + lmax2, res_theta=res_theta, res_phi=res_phi)
+    with jax.ensure_compile_time_eval():
+        # Precompute the change of basis matrices.
+        y1_grid = gtp_utils.compute_y_grid(lmax1, res_theta=res_theta, res_phi=res_phi)
+        y2_grid = gtp_utils.compute_y_grid(lmax2, res_theta=res_theta, res_phi=res_phi)
+        z_grid = gtp_utils.compute_z_grid(
+            lmax1 + lmax2, res_theta=res_theta, res_phi=res_phi
+        )
 
     # Convert to 2D Fourier coefficients.
     input1_uv = jnp.einsum("a,auv->uv", input1.array, y1_grid)
@@ -171,7 +182,7 @@ def gaunt_tensor_product_fourier_2D(
         e3nn.s2_irreps(lmax1 + lmax2),
         output_lm.real,
     )
-    return output_lm
+    return output_lm.filter(filter_ir_out)
 
 
 def gaunt_tensor_product_s2grid(
@@ -184,8 +195,15 @@ def gaunt_tensor_product_s2grid(
     p_val1: int,
     p_val2: int,
     s2grid_fft: bool,
+    filter_ir_out=None,
 ) -> e3nn.IrrepsArray:
     """Gaunt tensor product using signals on S2."""
+    if filter_ir_out is None:
+        filter_ir_out = e3nn.s2_irreps(
+            input1.irreps.lmax + input2.irreps.lmax, p_val=p_val1 * p_val2, p_arg=-1
+        )
+    filter_ir_out = _validate_filter_ir_out(filter_ir_out)
+
     # Transform the inputs to signals on S2.
     input1_on_grid = e3nn.to_s2grid(
         input1,
@@ -208,17 +226,11 @@ def gaunt_tensor_product_s2grid(
 
     # Multiply the signals on the grid.
     output_on_grid = input1_on_grid * input2_on_grid
-    
+
     # Transform the output back to irreps.
     output = e3nn.from_s2grid(
         output_on_grid,
-        irreps=e3nn.s2_irreps(
-            input1.irreps.lmax + input2.irreps.lmax,
-            p_val=p_val1 * p_val2,
-            p_arg=-1,
-        ),
+        irreps=filter_ir_out,
         fft=s2grid_fft,
     )
     return output
-
-
