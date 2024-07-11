@@ -1,11 +1,11 @@
-for tp_type in "CGTP-dense"
+for tp_type in "CGTP-dense" "CGTP-sparse" "GTP-grid" "GTP-fourier"
 do
-    for irreps_type in "SISO"
+    for irreps_type in "SIMO"
     do
         for lmax in 1 2 3 4 5 6 7 8
         do
             echo "$tp_type $irreps_type $lmax"
-            python -m utils.run_profiler benchmark_tp.py nsight_profiles/nsight_${irreps_type}_${tp_type}_${lmax}.csv --lstensor_product_type=$tp_type --irreps_type=$irreps_type --lmax=$lmax --ncu_flag=True
+            python -m utils.run_profiler benchmark_tp.py nsight_profiles/nsight_${irreps_type}_${tp_type}_${lmax}.csv --tensor_product_type=$tp_type --irreps_type=$irreps_type --lmax=$lmax --ncu_flag=True
         done
     done
 done
