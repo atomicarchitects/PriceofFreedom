@@ -15,55 +15,58 @@ files=[x for x in os.listdir(FLAGS.profiles_path) if x.endswith('.csv')]
 files.sort()
 df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax',
                            'Time', 'GFLOPs', 'Tensor Core GFLOPs', 'GFLOPs/s', 'Tensor Core GFLOPs/s',
-                           'DRAM GB'])
+                           'DRAM Read GB', 'DRAM Write GB', 'DRAM Total GB', 'DRAM Throughput %'])
 
 for iloc, file in enumerate(files):
     tag, ext = os.path.splitext(os.path.basename(file))
     _, irreps_type, tensor_product_type, lmax = tag.split("_")
     file_path = os.getcwd() + '/' + FLAGS.profiles_path + '/' + file
     df = pd.read_csv(file_path, skiprows=2)
-    try:
-        df['Metric Value'] =pd.to_numeric(df['Metric Value'].str.replace(r',','', regex=True))
-        dft=df.groupby(['Kernel Name','Metric Name']).sum()
-        dfmetric=pd.pivot_table(dft, index='Kernel Name', columns='Metric Name', values='Metric Value')
-        dfmetric['Count']=df.groupby(['Kernel Name']).count()['ID'].div(dfmetric.shape[1])
 
-        dfmetric['Time']=dfmetric['sm__cycles_elapsed.avg'] \
-                        / (dfmetric['sm__cycles_elapsed.avg.per_second'] /dfmetric['Count'] )
+    df['Metric Value'] =pd.to_numeric(df['Metric Value'].str.replace(r',','', regex=True))
+    dft=df.groupby(['Kernel Name','Metric Name']).sum()
+    dfmetric=pd.pivot_table(dft, index='Kernel Name', columns='Metric Name', values='Metric Value')
+    dfmetric['Count']=df.groupby(['Kernel Name']).count()['ID'].div(dfmetric.shape[1])
 
-        dfmetric['CC FLOPs']  = 2 * dfmetric['sm__sass_thread_inst_executed_op_dfma_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_dmul_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_dadd_pred_on.sum'] \
-                                + 2 * dfmetric['sm__sass_thread_inst_executed_op_ffma_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_fmul_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_fadd_pred_on.sum'] \
-                                + 2 * dfmetric['sm__sass_thread_inst_executed_op_hfma_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_hmul_pred_on.sum'] \
-                                + dfmetric['sm__sass_thread_inst_executed_op_hadd_pred_on.sum']
+    dfmetric['Time']=dfmetric['sm__cycles_elapsed.avg'] \
+                    / (dfmetric['sm__cycles_elapsed.avg.per_second'] /dfmetric['Count'] )
 
-        MAGIC_NUMBER = 2048 # Ampere
-        # MAGIC_NUMBER = 512 # Turing
+    dfmetric['CC FLOPs']  = 2 * dfmetric['sm__sass_thread_inst_executed_op_dfma_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_dmul_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_dadd_pred_on.sum'] \
+                            + 2 * dfmetric['sm__sass_thread_inst_executed_op_ffma_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_fmul_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_fadd_pred_on.sum'] \
+                            + 2 * dfmetric['sm__sass_thread_inst_executed_op_hfma_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_hmul_pred_on.sum'] \
+                            + dfmetric['sm__sass_thread_inst_executed_op_hadd_pred_on.sum']
 
-        dfmetric['TC FLOPs']= MAGIC_NUMBER * dfmetric['sm__inst_executed_pipe_tensor.sum']
-        # Don't know where that 512 is coming from
-        dfmetric['all FLOPs']= dfmetric['CC FLOPs'] + dfmetric['TC FLOPs']
+    MAGIC_NUMBER = 2048 # Ampere
+    # MAGIC_NUMBER = 512 # Turing
 
-        dfmetric['AI HBM'] = dfmetric['all FLOPs'].div(dfmetric['dram__bytes.sum'])
-        dfmetric['AI L2'] = dfmetric['all FLOPs'].div(dfmetric['lts__t_bytes.sum'])
-        dfmetric['AI L1'] = dfmetric['all FLOPs'].div(dfmetric['l1tex__t_bytes.sum'])
-        dfmetric['all GFLOPs'] = dfmetric['all FLOPs']/1024/1024/1024
-        dfmetric['GFLOPs/s'] = dfmetric['all GFLOPs']/ dfmetric['Time']
-        dfmetric['TC GFLOPs'] = dfmetric['TC FLOPs']/1024/1024/1024
-        dfmetric['TC GFLOPs/s'] = dfmetric['TC GFLOPs']/ dfmetric['Time'].to_list()
-        dfmetric['DRAM GB'] = dfmetric['dram__bytes.sum']/1024/1024/1024
-        
-        
-        df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax,
-                        sum(dfmetric['Time'].to_list()), sum(dfmetric['all GFLOPs'].to_list()), sum(dfmetric['TC GFLOPs'].to_list()),
-                        sum(dfmetric['GFLOPs/s'].to_list()), sum(dfmetric['TC GFLOPs/s'].to_list()), sum(dfmetric['DRAM GB'].to_list())]
+    dfmetric['TC FLOPs']= MAGIC_NUMBER * dfmetric['sm__inst_executed_pipe_tensor.sum']
+    # Don't know where that 512 is coming from
+    dfmetric['all FLOPs']= dfmetric['CC FLOPs'] + dfmetric['TC FLOPs']
 
-    except KeyError:
-         continue
+    dfmetric['AI HBM'] = dfmetric['all FLOPs'].div(dfmetric['dram__bytes.sum'])
+    dfmetric['AI L2'] = dfmetric['all FLOPs'].div(dfmetric['lts__t_bytes.sum'])
+    dfmetric['AI L1'] = dfmetric['all FLOPs'].div(dfmetric['l1tex__t_bytes.sum'])
+    dfmetric['all GFLOPs'] = dfmetric['all FLOPs']/1024/1024/1024
+    dfmetric['GFLOPs/s'] = dfmetric['all GFLOPs']/ dfmetric['Time']
+    dfmetric['TC GFLOPs'] = dfmetric['TC FLOPs']/1024/1024/1024
+    dfmetric['TC GFLOPs/s'] = dfmetric['TC GFLOPs']/ dfmetric['Time'].to_list()
+    dfmetric['DRAM Reads GB'] = dfmetric['dram__bytes_read.sum']/1024/1024/1024
+    dfmetric['DRAM Writes GB'] = dfmetric['dram__bytes_write.sum']/1024/1024/1024
+    dfmetric['DRAM Total GB'] = dfmetric['dram__bytes.sum']/1024/1024/1024
+    dfmetric['DRAM Throughput %'] = dfmetric['gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed']
+
+    
+    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax,
+                    sum(dfmetric['Time'].to_list()), sum(dfmetric['all GFLOPs'].to_list()), sum(dfmetric['TC GFLOPs'].to_list()),
+                    sum(dfmetric['GFLOPs/s'].to_list()), sum(dfmetric['TC GFLOPs/s'].to_list()),
+                    sum(dfmetric['DRAM Reads GB'].to_list()), sum(dfmetric['DRAM Writes GB'].to_list()), sum(dfmetric['DRAM Total GB'].to_list()),
+                    sum(dfmetric['DRAM Throughput %'].to_list())/len(dfmetric['DRAM Throughput %'])]
+
 
 df_integrated.to_csv(FLAGS.output_path)
 

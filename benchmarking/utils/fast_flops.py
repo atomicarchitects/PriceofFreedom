@@ -48,8 +48,12 @@ def flops_counter(func):
             else:
                 raise ValueError(f"{type(result)} not supported")
 
+        from ctypes import cdll
+        libcudart = cdll.LoadLibrary("libcudart.so")
+        libcudart.cudaProfilerStart()
         nvtx_range = nvtx.start_range(f"profile")
         result = func(*args, **kwargs)
         nvtx.end_range(nvtx_range)
+        libcudart.cudaProfilerStop()
         return result
     return wrapper

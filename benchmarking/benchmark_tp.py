@@ -6,7 +6,10 @@ from src.tensor_products.functional import clebsch_gordan_tensor_product_dense, 
 from benchmarking.utils.fast_flops import flops_counter
 
 import jax
-jax.clear_caches()
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+
 import jax.numpy as jnp
 from typing import Union, List
 import e3nn_jax as e3nn
@@ -81,12 +84,12 @@ def benchmark_per_lmax(lmax: int, tp_type: str, irreps_type: str):
     if FLAGS.ncu_flag:
         func_flops(TP, x, y)
     else:
-        printf(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax}")
+        print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax}")
         start = time.process_time()
         for _ in range(WARMUP):
             result = TP(x, y)
             
-        print(f"Compiling took {time.process_time() - start:.3f}")
+        print(f"Compiling took {(time.process_time() - start):.3f} s")
 
         timings = []
         for _ in range(TRIALS):
@@ -95,7 +98,7 @@ def benchmark_per_lmax(lmax: int, tp_type: str, irreps_type: str):
             result.array.block_until_ready()
             timings.append(time.process_time() - start)
             
-        print(f"Walltime (ms) {np.mean(timings)*1000:.3f}")
+        print(f"Walltime {np.mean(timings):.6f} s")
 def main():
     benchmark_per_lmax(
         FLAGS.lmax, FLAGS.tensor_product_type, FLAGS.irreps_type
