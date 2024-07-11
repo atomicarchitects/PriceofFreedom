@@ -1,5 +1,5 @@
-==PROF== Connected to process 1499640 (/usr/bin/python3.10)
-==PROF== Disconnected from process 1499640
+==PROF== Connected to process 1508081 (/usr/bin/python3.10)
+==PROF== Disconnected from process 1508081
 ==WARNING== No kernels were profiled.
-==WARNING== Profiling kernels launched by child processes requires the --target-processes all option.
+==WARNING== Note that specified NVTX include expressions match only start/end ranges.
 ==WARNING== Refer https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html#nvtx-filtering for NVTX Filtering usage.
