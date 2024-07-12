@@ -8,7 +8,7 @@ pyg_lib
 torch_scatter
 torch_sparse
 torch_cluster
-torch_spline_conv 
+torch_spline_conv
 rdkit
 jax[cuda12]
 e3nn_jax
@@ -17,3 +17,5 @@ optax
 jraph
 ml_collections
 wandb
+pandas
+nvtx

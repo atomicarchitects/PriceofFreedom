@@ -86,9 +86,8 @@ def benchmark_per_lmax(lmax: int, tp_type: str, irreps_type: str):
     else:
         print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax}")
         start = time.process_time()
-        for _ in range(WARMUP):
-            result = TP(x, y)
-            
+        result = TP(x, y)
+        result.array.block_until_ready()
         print(f"Compiling took {(time.process_time() - start):.3f} s")
 
         timings = []

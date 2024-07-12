@@ -13,9 +13,19 @@ FLAGS(sys.argv)
 
 files=[x for x in os.listdir(FLAGS.profiles_path) if x.endswith('.csv')]
 files.sort()
-df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax',
-                           'Time', 'GFLOPs', 'Tensor Core GFLOPs', 'GFLOPs/s', 'Tensor Core GFLOPs/s',
-                           'DRAM Read GB', 'DRAM Write GB', 'DRAM Total GB', 'DRAM Throughput %'])
+df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax', 'GFLOPs/s', 'GB/s'])
+
+from scipy import stats
+
+def report_mean_and_error(data, confidence=0.95):
+    data = np.array(data)
+    n = len(data)
+    mean = np.mean(data)
+    se = stats.sem(data)
+    margin_of_error = se * stats.t.ppf((1 + confidence) / 2, n - 1)
+    
+    return mean, margin_of_error
+
 
 for iloc, file in enumerate(files):
     tag, ext = os.path.splitext(os.path.basename(file))
@@ -55,17 +65,14 @@ for iloc, file in enumerate(files):
     dfmetric['GFLOPs/s'] = dfmetric['all GFLOPs']/ dfmetric['Time']
     dfmetric['TC GFLOPs'] = dfmetric['TC FLOPs']/1024/1024/1024
     dfmetric['TC GFLOPs/s'] = dfmetric['TC GFLOPs']/ dfmetric['Time'].to_list()
-    dfmetric['DRAM Reads GB'] = dfmetric['dram__bytes_read.sum']/1024/1024/1024
-    dfmetric['DRAM Writes GB'] = dfmetric['dram__bytes_write.sum']/1024/1024/1024
-    dfmetric['DRAM Total GB'] = dfmetric['dram__bytes.sum']/1024/1024/1024
-    dfmetric['DRAM Throughput %'] = dfmetric['gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed']
+    dfmetric['Read Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second']/1024**3
+    # dfmetric['Write Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second']/1024**3
+    # dfmetric['Total Throughput GB/s'] = dfmetric['Load Throughput GB/s'] + dfmetric['Read Throughput GB/s']
 
     
-    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax,
-                    sum(dfmetric['Time'].to_list()), sum(dfmetric['all GFLOPs'].to_list()), sum(dfmetric['TC GFLOPs'].to_list()),
-                    sum(dfmetric['GFLOPs/s'].to_list()), sum(dfmetric['TC GFLOPs/s'].to_list()),
-                    sum(dfmetric['DRAM Reads GB'].to_list()), sum(dfmetric['DRAM Writes GB'].to_list()), sum(dfmetric['DRAM Total GB'].to_list()),
-                    sum(dfmetric['DRAM Throughput %'].to_list())/len(dfmetric['DRAM Throughput %'])]
+    gflops_s, gflops_s_error = report_mean_and_error(dfmetric['GFLOPs/s'])
+    gb_s, gb_s_error = report_mean_and_error(dfmetric['Read Throughput GB/s'])
+    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax, gflops_s, gflops_s_error, gb_s, gb_s_error]
 
 
 df_integrated.to_csv(FLAGS.output_path)

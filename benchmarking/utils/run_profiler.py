@@ -20,7 +20,12 @@ metrics += "sm__inst_executed_pipe_tensor.sum,"
 
 # DRAM, L2 and L1
 #
-metrics += "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed,dram__bytes.sum,dram__bytes_read.sum,dram__bytes_write.sum,lts__t_bytes.sum,l1tex__t_bytes.sum,lts__t_sectors_srcunit_tex_lookup_hit.sum,lts__t_sectors_srcunit_tex_lookup_miss.sum,"
+metrics += "dram__bytes.sum,lts__t_bytes.sum,l1tex__t_bytes.sum,lts__t_sectors_srcunit_tex_lookup_hit.sum,lts__t_sectors_srcunit_tex_lookup_miss.sum,"
+
+
+# Throughput
+
+metrics += "l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second,l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second,"
 
 # Cache hit rates
 metrics += "l1tex__t_sector_hit_rate.pct,lts__t_sector_hit_rate"
