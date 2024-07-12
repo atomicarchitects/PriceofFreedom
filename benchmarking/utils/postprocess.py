@@ -13,16 +13,9 @@ FLAGS(sys.argv)
 
 files=[x for x in os.listdir(FLAGS.profiles_path) if x.endswith('.csv')]
 files.sort()
-df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax', 'GFLOPs/s (mean)', "GFLOPs/s (std)", "GB/s", "GB/s (std)"])
-
-from scipy import stats
-
-def report_mean_and_std(data, confidence=0.95):
-    data = np.array(data)
-    n = len(data)
-    mean = np.mean(data)
-    se = stats.sem(data)
-    return mean, se
+df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax',
+                                      'GFLOPs/s (min)', "GFLOPs/s (mean)", "GFLOPs/s (max)",
+                                      "GB/s (min)", "GB/s (mean)", "GB/s (max)" ])
 
 
 for iloc, file in enumerate(files):
@@ -64,13 +57,16 @@ for iloc, file in enumerate(files):
     dfmetric['TC GFLOPs'] = dfmetric['TC FLOPs']/1024/1024/1024
     dfmetric['TC GFLOPs/s'] = dfmetric['TC GFLOPs']/ dfmetric['Time'].to_list()
     dfmetric['Read Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second']/1024**3
-    # dfmetric['Write Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second']/1024**3
-    # dfmetric['Total Throughput GB/s'] = dfmetric['Load Throughput GB/s'] + dfmetric['Read Throughput GB/s']
+    dfmetric['Write Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second']/1024**3
+    dfmetric['Total Throughput GB/s'] = dfmetric['Read Throughput GB/s'] + dfmetric['Read Throughput GB/s']
 
-    
-    gflops_s, gflops_s_error = report_mean_and_error(dfmetric['GFLOPs/s'])
-    gb_s, gb_s_error = report_mean_and_error(dfmetric['Read Throughput GB/s'])
-    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax, gflops_s, gflops_s_error, gb_s, gb_s_error]
+
+    gflops_s_min, gflops_s_mean, gflops_s_max = np.max(dfmetric['GFLOPs/s']), np.mean(dfmetric['GFLOPs/s']), np.min(dfmetric['GFLOPs/s'])
+    gb_s_min, gb_s_mean, gb_s_max =  np.max(dfmetric['Read Throughput GB/s']), np.mean(dfmetric['Read Throughput GB/s']), np.min(dfmetric['Read Throughput GB/s'])
+
+    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax,
+                               gflops_s_min, gflops_s_mean, gflops_s_max,
+                               gb_s_min, gb_s_mean, gb_s_max]
 
 
 df_integrated.to_csv(FLAGS.output_path)

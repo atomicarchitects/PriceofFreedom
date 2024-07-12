@@ -85,11 +85,10 @@ def benchmark_per_lmax(lmax: int, tp_type: str, irreps_type: str):
     start = time.process_time()
     result = TP(x, y)
     result.array.block_until_ready()
-    print(f"Compiling took {(time.process_time() - start):.3f} s")
-
     if FLAGS.ncu_flag:
         func_flops(TP, x, y)
     else:
+        print(f"Compiling took {(time.process_time() - start):.3f} s")
         timings = []
         for _ in range(TRIALS):
             start = time.process_time()
