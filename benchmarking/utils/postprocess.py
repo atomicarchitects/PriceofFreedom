@@ -13,18 +13,16 @@ FLAGS(sys.argv)
 
 files=[x for x in os.listdir(FLAGS.profiles_path) if x.endswith('.csv')]
 files.sort()
-df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax', 'GFLOPs/s', 'GB/s'])
+df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax', 'GFLOPs/s (mean)', "GFLOPs/s (std)", "GB/s", "GB/s (std)"])
 
 from scipy import stats
 
-def report_mean_and_error(data, confidence=0.95):
+def report_mean_and_std(data, confidence=0.95):
     data = np.array(data)
     n = len(data)
     mean = np.mean(data)
     se = stats.sem(data)
-    margin_of_error = se * stats.t.ppf((1 + confidence) / 2, n - 1)
-    
-    return mean, margin_of_error
+    return mean, se
 
 
 for iloc, file in enumerate(files):

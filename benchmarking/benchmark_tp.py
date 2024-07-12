@@ -81,15 +81,15 @@ def benchmark_per_lmax(lmax: int, tp_type: str, irreps_type: str):
     y = e3nn.normal(input_irreps, jax.random.PRNGKey(1))
     TP = tp_initializer(tp_type, output_irreps)
     TP = jax.jit(TP)
+    print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax}")
+    start = time.process_time()
+    result = TP(x, y)
+    result.array.block_until_ready()
+    print(f"Compiling took {(time.process_time() - start):.3f} s")
+
     if FLAGS.ncu_flag:
         func_flops(TP, x, y)
     else:
-        print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax}")
-        start = time.process_time()
-        result = TP(x, y)
-        result.array.block_until_ready()
-        print(f"Compiling took {(time.process_time() - start):.3f} s")
-
         timings = []
         for _ in range(TRIALS):
             start = time.process_time()
