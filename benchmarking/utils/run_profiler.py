@@ -40,7 +40,7 @@ args = parser.parse_args()
 input_file = args.input_file
 output_file = args.csv_file
 input_args = ' '.join(args.args)
-profile_str = f"ncu --profile-from-start 0 --nvtx --nvtx-include \"profile\" --metrics {metrics} --csv --print-units base"
+profile_str = f"ncu --target-processes all --profile-from-start 0 --nvtx --nvtx-include \"profile\" --metrics {metrics} --csv --print-units base"
 
 print(input_args)
 try:

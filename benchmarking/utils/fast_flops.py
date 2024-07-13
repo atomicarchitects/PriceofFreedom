@@ -7,7 +7,7 @@ def flops_counter(func):
         from ctypes import cdll
         libcudart = cdll.LoadLibrary("libcudart.so")
         libcudart.cudaProfilerStart()
-        nvtx_range = nvtx.start_range(f"profile")
+        nvtx_range = nvtx.start_range("profile")
         result = func(*args, **kwargs)
         nvtx.end_range(nvtx_range)
         libcudart.cudaProfilerStop()

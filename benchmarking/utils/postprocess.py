@@ -13,16 +13,16 @@ FLAGS(sys.argv)
 
 files=[x for x in os.listdir(FLAGS.profiles_path) if x.endswith('.csv')]
 files.sort()
-df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax',
-                                      'GFLOPs/s (min)', "GFLOPs/s (mean)", "GFLOPs/s (max)",
-                                      "GB/s (min)", "GB/s (mean)", "GB/s (max)" ])
+df_integrated = pd.DataFrame(columns=['irreps_type', 'tensor_product_type', 'lmax', 'Time',
+                                      'GFLOPs/s (min)', "GFLOPs/s (mean)", "GFLOPs/s (max)", "Total GFLOPs/s",
+                                      "GB/s (min)", "GB/s (mean)", "GB/s (max)", "Total GB/s" ])
 
 
 for iloc, file in enumerate(files):
     tag, ext = os.path.splitext(os.path.basename(file))
     _, irreps_type, tensor_product_type, lmax = tag.split("_")
     file_path = os.getcwd() + '/' + FLAGS.profiles_path + '/' + file
-    df = pd.read_csv(file_path, skiprows=2)
+    df = pd.read_csv(file_path, skiprows=3)
 
     df['Metric Value'] =pd.to_numeric(df['Metric Value'].str.replace(r',','', regex=True))
     dft=df.groupby(['Kernel Name','Metric Name']).sum()
@@ -59,14 +59,17 @@ for iloc, file in enumerate(files):
     dfmetric['Read Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second']/1024**3
     dfmetric['Write Throughput GB/s'] = dfmetric['l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second']/1024**3
     dfmetric['Total Throughput GB/s'] = dfmetric['Read Throughput GB/s'] + dfmetric['Read Throughput GB/s']
+    dfmetric['DRAM GB'] = dfmetric['dram__bytes.sum']/1024/1024/1024
 
 
-    gflops_s_min, gflops_s_mean, gflops_s_max = np.max(dfmetric['GFLOPs/s']), np.mean(dfmetric['GFLOPs/s']), np.min(dfmetric['GFLOPs/s'])
-    gb_s_min, gb_s_mean, gb_s_max =  np.max(dfmetric['Read Throughput GB/s']), np.mean(dfmetric['Read Throughput GB/s']), np.min(dfmetric['Read Throughput GB/s'])
-
-    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax,
-                               gflops_s_min, gflops_s_mean, gflops_s_max,
-                               gb_s_min, gb_s_mean, gb_s_max]
+    total_time = np.sum(dfmetric['Time'])
+    total_gflops_s = np.sum(dfmetric['all GFLOPs'])/total_time
+    gflops_s_min, gflops_s_mean, gflops_s_max = np.min(dfmetric['GFLOPs/s']), np.mean(dfmetric['GFLOPs/s']), np.max(dfmetric['GFLOPs/s'])
+    gb_s_min, gb_s_mean, gb_s_max =  np.min(dfmetric['Read Throughput GB/s']), np.mean(dfmetric['Read Throughput GB/s']), np.max(dfmetric['Read Throughput GB/s'])
+    total_dram_gb_s = np.sum(dfmetric['DRAM GB'])/total_time
+    df_integrated.loc[iloc] = [irreps_type, tensor_product_type, lmax, total_time,
+                               gflops_s_min, gflops_s_mean, gflops_s_max, total_gflops_s,
+                               gb_s_min, gb_s_mean, gb_s_max, total_dram_gb_s]
 
 
 df_integrated.to_csv(FLAGS.output_path)
