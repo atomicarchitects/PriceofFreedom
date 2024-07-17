@@ -28,7 +28,7 @@ bash shell/run_gpu_timing.sh
 
 ### Nsight Compute (GPU-only)
 
-[Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed
+[Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM)
 
 ```
 bash shell/run_nsight_profiling.sh
