@@ -1,6 +1,8 @@
 import csv
 import os
-os.chdir("../")
+import sys
+path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(path)
 from src.tensor_products.functional import clebsch_gordan_tensor_product_dense, clebsch_gordan_tensor_product_sparse, gaunt_tensor_product_s2grid, gaunt_tensor_product_fourier_2D
 from benchmarking.utils.fast_flops import flops_counter
 
@@ -17,7 +19,6 @@ import numpy as np
 from functools import partial
 import time
 from absl import flags
-import sys
 
 flags.DEFINE_enum("device", "gpu", ["gpu", "cpu"], "Device to run on")
 flags.DEFINE_integer("lmax", 2, "lmax")
