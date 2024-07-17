@@ -1,6 +1,6 @@
-import sys
 import csv
-sys.path.append("../..")
+import os
+os.chdir("../")
 from src.tensor_products.functional import clebsch_gordan_tensor_product_dense, clebsch_gordan_tensor_product_sparse, gaunt_tensor_product_s2grid, gaunt_tensor_product_fourier_2D
 from benchmarking.utils.fast_flops import flops_counter
 
