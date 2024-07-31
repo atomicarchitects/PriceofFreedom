@@ -1,4 +1,4 @@
-# Price Of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
+# Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
 
 Paper: https://openreview.net/forum?id=0HHidbjwcf
 
