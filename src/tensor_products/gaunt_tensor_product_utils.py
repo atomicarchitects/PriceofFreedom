@@ -23,7 +23,7 @@ class RectangularSignal:
         if wrap_theta:
             def f_wrapped(theta: jax.Array, phi: jax.Array) -> jax.Array:
                 f_val = f(theta, phi)
-                fd_val = f(2 * jnp.pi - theta, phi)
+                fd_val = -f(theta, phi)
                 return jnp.where(theta < jnp.pi, f_val, fd_val)
             func = f_wrapped
         else:
@@ -206,17 +206,17 @@ def create_fourier_2D_signal(u: int, v: int, *, res_theta: int, res_phi: int, wr
 
 def to_u_index(u: int, lmax: int) -> int:
     """Returns the index of u in the grid."""
-    return u + 2 * lmax
+    return u + lmax
 
 def to_v_index(v: int, lmax: int) -> int:
     """Returns the index of v in the grid."""
-    return v + 2 * lmax
+    return v + lmax
 
 
 @functools.lru_cache(maxsize=None)
 def compute_y(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes y^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=True)
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m%2))
     F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
     return (Y_signal * F_signal).integrate(area_element="rectangular")
 
@@ -225,11 +225,11 @@ def compute_y(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
 def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
     """Computes the grid of y^{l,m}_{u, v}."""
     lm_indices = jnp.arange((lmax + 1) ** 2)
-    us = jnp.arange(-2 * lmax, 2 * lmax + 1)
-    vs = jnp.arange(-2 * lmax, 2 * lmax + 1)
+    us = jnp.arange(-lmax, lmax + 1)
+    vs = jnp.arange(-lmax, lmax + 1)
     mesh = jnp.meshgrid(lm_indices, us, vs, indexing='ij')
     
-    y_grid = jnp.zeros(((lmax + 1) ** 2, 4 * lmax + 1, 4 * lmax + 1), dtype=jnp.complex64)
+    y_grid = jnp.zeros(((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1), dtype=jnp.complex64)
     for lm_index, u, v in zip(*[m.ravel() for m in mesh]):
         l, m = from_lm_index(lm_index)
         u_index = to_u_index(u, lmax)
@@ -238,14 +238,14 @@ def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
         y_val = compute_y(l, m, u, v, res_theta=res_theta, res_phi=res_phi)
         y_grid = y_grid.at[lm_index, u_index, v_index].set(y_val)
 
-    assert y_grid.shape == ((lmax + 1) ** 2, 4 * lmax + 1, 4 * lmax + 1)
+    assert y_grid.shape == ((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1)
     return y_grid
 
 
 @functools.lru_cache(maxsize=None)
 def compute_z(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes z^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m%2))
     F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
     return (Y_signal * F_signal).integrate(area_element="spherical")
 
@@ -254,11 +254,11 @@ def compute_z(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
 def compute_z_grid(lmax: int, *, res_theta: int, res_phi: int):
     """Computes the grid of z^{l,m}_{u, v}."""
     lm_indices = jnp.arange((lmax + 1) ** 2)
-    us = jnp.arange(-2 * lmax, 2 * lmax + 1)
-    vs = jnp.arange(-2 * lmax, 2 * lmax + 1)
+    us = jnp.arange(-lmax, lmax + 1)
+    vs = jnp.arange(-lmax, lmax + 1)
     mesh = jnp.meshgrid(lm_indices, us, vs, indexing='ij')
     
-    z_grid = jnp.zeros(((lmax + 1) ** 2, 4 * lmax + 1, 4 * lmax + 1), dtype=jnp.complex64)
+    z_grid = jnp.zeros(((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1), dtype=jnp.complex64)
     for lm_index, u, v in zip(*[m.ravel() for m in mesh]):
         l, m = from_lm_index(lm_index)
         u_index = to_u_index(u, lmax)
@@ -267,7 +267,7 @@ def compute_z_grid(lmax: int, *, res_theta: int, res_phi: int):
         z_val = compute_z(l, m, u, v, res_theta=res_theta, res_phi=res_phi)
         z_grid = z_grid.at[lm_index, u_index, v_index].set(z_val)
 
-    assert z_grid.shape == ((lmax + 1) ** 2, 4 * lmax + 1, 4 * lmax + 1)
+    assert z_grid.shape == ((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1)
     return z_grid
 
 
