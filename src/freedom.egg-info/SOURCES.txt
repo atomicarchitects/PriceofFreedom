@@ -1,7 +1,10 @@
 .gitignore
+.python-version
 README.md
+gaunt.ipynb
 pyproject.toml
 requirements.in
+uv.lock
 benchmarking/__main__.py
 benchmarking/analysis.ipynb
 benchmarking/csv/nsight_profiling.csv
@@ -203,6 +206,8 @@ src/freedom/models/utils.py
 src/freedom/tensor_products/__init__.py
 src/freedom/tensor_products/functional.py
 src/freedom/tensor_products/gaunt_tensor_product_utils.py
+src/freedom/tensor_products/gaunt_test.ipynb
 src/freedom/tensor_products/tensor_products.py
+src/freedom/tensor_products/vector_spherical_harmonics.py
 src/freedom/tetris/train.py
 tests/test_equivariance.py

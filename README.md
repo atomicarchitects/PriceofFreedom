@@ -4,16 +4,21 @@ Paper: https://openreview.net/forum?id=0HHidbjwcf
 
 ## Installation
 
-We recommend using uv:
+We recommend using [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
+source .venv/bin/activate
 uv pip install -e .
 ```
 
+Alternatively, you can install the dependencies manually:
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.in
 ```
+
 ## Tetris Experiments
 
 ```bash

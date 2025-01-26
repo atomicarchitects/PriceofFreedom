@@ -1,6 +1,6 @@
 Metadata-Version: 2.2
 Name: freedom
-Version: 0.0.post1.dev10+g5780b39.d20250126
+Version: 0.0.post1.dev12+g69322c3.d20250126
 Summary: The Price of Freedom is Eternal Vigilance
 Author: YuQing Xie, Ameya Daigavane, Mit Kotak
 Requires-Python: >=3.10
@@ -26,16 +26,20 @@ Paper: https://openreview.net/forum?id=0HHidbjwcf
 
 ## Installation
 
-We recommend using uv:
+We recommend using [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
 uv pip install -e .
 ```
+Note that `uv` creates a virtual environment at `.venv`.
 
+Alternatively, you can install the dependencies manually:
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+pip install -r requirements.in
 ```
+
 ## Tetris Experiments
 
 ```bash
