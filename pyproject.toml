@@ -1,0 +1,47 @@
+[project]
+name = "freedom"
+description = "The Price of Freedom is Eternal Vigilance"
+authors = [{name = "YuQing Xie"}, {name = "Ameya Daigavane"}, {name = "Mit Kotak"}]
+dynamic = ["version", "readme", "dependencies", "optional-dependencies"]
+requires-python = ">=3.10"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.in"]}
+readme = {file = "README.md"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools >= 65", "setuptools_scm[toml]>=6.2"]
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools_scm]
+search_parent_directories = true
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.0"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # requires python >= 3.10
+    "B007",  # unused-loop-control-variable
+    "E741",  # ambiguous-variable-name
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+    "F401", # MODULE IMPORTED BUT UNUSED
+]

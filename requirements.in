@@ -1,0 +1,14 @@
+absl-py
+rdkit
+jax; sys_platform == 'darwin'
+jax[cuda12]; sys_platform == 'linux'
+e3nn_jax
+flax
+optax
+jraph
+ml_collections
+wandb
+nvtx; sys_platform == 'linux'
+pandas
+pytest
+ruff

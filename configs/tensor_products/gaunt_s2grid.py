@@ -1,5 +1,6 @@
 import ml_collections
 
+
 def get_config() -> ml_collections.ConfigDict:
     """Config for the tensor product."""
     tensor_product_config = ml_collections.ConfigDict()

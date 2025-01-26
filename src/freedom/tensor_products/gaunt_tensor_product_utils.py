@@ -3,6 +3,7 @@ import functools
 import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 class RectangularSignal:
@@ -15,10 +16,18 @@ class RectangularSignal:
 
         self.res_theta = res_theta
         self.res_phi = res_phi
-        assert self.grid_values.shape == (*self.grid_values.shape[:-2], res_theta, res_phi)
+        assert self.grid_values.shape == (
+            *self.grid_values.shape[:-2],
+            res_theta,
+            res_phi,
+        )
 
     def from_function(
-        f: Callable[[jax.Array, jax.Array], jax.Array], *, res_theta: int, res_phi: int, wrap_theta: bool
+        f: Callable[[jax.Array, jax.Array], jax.Array],
+        *,
+        res_theta: int,
+        res_phi: int,
+        wrap_theta: bool,
     ):
         """Create a signal from a function of theta and phi."""
         if wrap_theta:
@@ -32,18 +41,14 @@ class RectangularSignal:
         else:
             func = f
         thetas, phis = jnp.meshgrid(
-            RectangularSignal._thetas(res_theta), RectangularSignal._phis(res_phi), indexing="ij"
+            RectangularSignal._thetas(res_theta),
+            RectangularSignal._phis(res_phi),
+            indexing="ij",
         )
         fn_vmap = jax.jit(jax.vmap(jax.vmap(func)))
         grid_values = fn_vmap(thetas, phis)
 
         return RectangularSignal(grid_values, res_theta, res_phi)
-
-    def thetas(self):
-        return RectangularSignal._thetas(self.res_theta)
-
-    def phis(self):
-        return RectangularSignal._phis(self.res_phi)
 
     @staticmethod
     def _thetas(res_theta: int):
@@ -54,6 +59,14 @@ class RectangularSignal:
     def _phis(res_phi: int):
         """Returns the phi values of the grid."""
         return jnp.linspace(0, 2 * jnp.pi, res_phi)
+
+    def thetas(self):
+        """Returns the theta values of the grid."""
+        return RectangularSignal._thetas(self.res_theta)
+
+    def phis(self):
+        """Returns the phi values of the grid."""
+        return RectangularSignal._phis(self.res_phi)
 
     def integrate(self, area_element: str) -> jax.Array:
         """Computes the integral of the signal over a rectangular/spherical region."""
@@ -171,7 +184,7 @@ def spherical_harmonic(l: int, m: int) -> float:
         Returns a function that computes the spherical harmonic for a given theta and phi.
     """
 
-    def Y_lm(theta, phi):
+    def Y_lm(theta: float, phi: float) -> float:
         assert theta.shape == phi.shape
         return sh_theta(l, m, theta) * sh_phi(l, m, phi)
 
@@ -188,25 +201,20 @@ def fourier_2D(u: int, v: int) -> Callable[[float, float], float]:
 
 
 @functools.lru_cache(maxsize=None)
-def create_spherical_harmonic_signal(l: int, m: int, *, res_theta: int, res_phi: int, wrap_theta: bool):
+def create_spherical_harmonic_signal(l: int, m: int, *, res_theta: int, res_phi: int):
     """Creates a signal for Y^{l,m}."""
     return RectangularSignal.from_function(
         spherical_harmonic(l, m),
         res_theta=res_theta,
         res_phi=res_phi,
-        wrap_theta=wrap_theta,
+        wrap_theta=(m % 2 == 1),
     )
 
 
 @functools.lru_cache(maxsize=None)
-def create_fourier_2D_signal(u: int, v: int, *, res_theta: int, res_phi: int, wrap_theta: bool):
+def create_2D_fourier_signal(u: int, v: int, *, res_theta: int, res_phi: int):
     """Creates a signal for Fourier function defined by {u, v}."""
-    return RectangularSignal.from_function(
-        fourier_2D(u, v),
-        res_theta=res_theta,
-        res_phi=res_phi,
-        wrap_theta=wrap_theta,
-    )
+    return RectangularSignal.from_function(fourier_2D(u, v), res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
 
 
 def to_u_index(u: int, lmax: int) -> int:
@@ -222,8 +230,8 @@ def to_v_index(v: int, lmax: int) -> int:
 @functools.lru_cache(maxsize=None)
 def compute_y(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes y^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m % 2))
-    F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi)
+    F_signal = create_2D_fourier_signal(u, v, res_theta=res_theta, res_phi=res_phi)
     return (Y_signal * F_signal).integrate(area_element="rectangular")
 
 
@@ -251,8 +259,8 @@ def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
 @functools.lru_cache(maxsize=None)
 def compute_z(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes z^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m % 2))
-    F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi)
+    F_signal = create_2D_fourier_signal(u, v, res_theta=res_theta, res_phi=res_phi)
     return (Y_signal * F_signal).integrate(area_element="spherical")
 
 

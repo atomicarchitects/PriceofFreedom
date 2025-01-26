@@ -88,11 +88,15 @@ def check_equivariance(
         if not jnp.allclose(logits, rotated_logits, atol=1e-4):
             failed_seeds.append(key)
             if len(failed_seeds) == 0:
-                logging.info("Model is not equivariant: error = %f", jnp.max(jnp.abs(logits - rotated_logits)))
+                logging.info(
+                    "Model is not equivariant: error = %f",
+                    jnp.max(jnp.abs(logits - rotated_logits)),
+                )
 
     if failed_seeds:
         logging.info(
-            "Model is not equivariant: failed for %0.1f%% of random seeds.", len(failed_seeds) / num_seeds * 100
+            "Model is not equivariant: failed for %0.1f%% of random seeds.",
+            len(failed_seeds) / num_seeds * 100,
         )
     logging.info("Model is equivariant.")
 

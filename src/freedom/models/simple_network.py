@@ -127,7 +127,13 @@ class SimpleNetwork(nn.Module):
                 mlp_num_layers=self.mlp_num_layers,
                 tensor_product_fn=self.tensor_product_fn,
                 output_irreps=output_irreps,
-            )(node_features, graphs.senders, graphs.receivers, relative_vectors_sh, relative_vectors_norm)
+            )(
+                node_features,
+                graphs.senders,
+                graphs.receivers,
+                relative_vectors_sh,
+                relative_vectors_norm,
+            )
 
         # Readout.
         return self.readout(node_features, graphs)

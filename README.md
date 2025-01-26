@@ -4,6 +4,13 @@ Paper: https://openreview.net/forum?id=0HHidbjwcf
 
 ## Installation
 
+We recommend using uv:
+
+```bash
+uv sync
+uv pip install -e .
+```
+
 ```bash
 pip install -r requirements.txt
 ```

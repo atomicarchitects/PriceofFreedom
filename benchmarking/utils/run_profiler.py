@@ -22,20 +22,22 @@ metrics += "sm__inst_executed_pipe_tensor.sum,"
 metrics += "dram__bytes.sum,lts__t_bytes.sum,l1tex__t_bytes.sum,"
 
 # Throughput
-metrics += "l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second,l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second,"
+metrics += (
+    "l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum.per_second,l1tex__t_bytes_pipe_lsu_mem_global_op_st.sum.per_second,"
+)
 
 
-parser = argparse.ArgumentParser(description='Run a Python script with profiling')
-parser.add_argument('input_file', help='Path to the input Python file')
-parser.add_argument('csv_file', help='Path to the output csv file')
-parser.add_argument('args', nargs=argparse.REMAINDER, help='Arguments to pass to the input file')
+parser = argparse.ArgumentParser(description="Run a Python script with profiling")
+parser.add_argument("input_file", help="Path to the input Python file")
+parser.add_argument("csv_file", help="Path to the output csv file")
+parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments to pass to the input file")
 
 args = parser.parse_args()
 
 input_file = args.input_file
 output_file = args.csv_file
-input_args = ' '.join(args.args)
-profile_str = f"ncu --target-processes all --profile-from-start 0 --nvtx --nvtx-include \"profile\" --metrics {metrics} --csv --print-units base"
+input_args = " ".join(args.args)
+profile_str = f'ncu --target-processes all --profile-from-start 0 --nvtx --nvtx-include "profile" --metrics {metrics} --csv --print-units base'
 
 print(input_args)
 try:
