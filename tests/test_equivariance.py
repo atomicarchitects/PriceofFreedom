@@ -83,9 +83,9 @@ def get_tensor_product(
 @pytest.mark.parametrize(
     "tensor_product_type",
     [
-        # "clebsch-gordan-dense",
-        # "clebsch-gordan-sparse",
-        # "gaunt-s2grid",
+        "clebsch-gordan-dense",
+        "clebsch-gordan-sparse",
+        "gaunt-s2grid",
         "gaunt-2D-fourier-fft",
         "gaunt-2D-fourier-direct",
     ],
@@ -139,11 +139,11 @@ def test_equivariance(
     )
 
     if tensor_product_type.startswith("gaunt-2D-fourier"):
-        atol = 1e-1
+        atol = 2e-2
     elif tensor_product_type.endswith("s2grid"):
-        atol = 1e-2
+        atol = 1e-5
     else:
-        atol = 1e-3
+        atol = 1e-5
 
     diff = jnp.abs(tp_rot.array - tp.transform_by_matrix(R).array)
     max_abs_error = diff.max()
