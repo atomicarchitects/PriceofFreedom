@@ -2,6 +2,7 @@ from typing import Tuple, Union, Sequence, Optional
 import jax
 import jax.numpy as jnp
 import e3nn_jax as e3nn
+from jax.experimental import sparse
 
 from src.tensor_products import gaunt_tensor_product_utils as gtp_utils
 
@@ -186,9 +187,18 @@ def gaunt_tensor_product_fourier_2D(
             lmax1 + lmax2, res_theta=res_theta, res_phi=res_phi
         )
 
+        # Convert to sparse arrays.
+        y1_grid_sp = sparse.BCOO.fromdense(y1_grid.round(8))
+        y2_grid_sp = sparse.BCOO.fromdense(y2_grid.round(8))
+        z_grid_sp = sparse.BCOO.fromdense(z_grid.round(8))
+
+    @sparse.sparsify
+    def to_2D_fourier_coeffs(input, y_grid):
+        return jnp.einsum("...a,auv->...uv", input.array, y_grid)
+
     # Convert to 2D Fourier coefficients.
-    input1_uv = jnp.einsum("...a,auv->...uv", input1.array, y1_grid)
-    input2_uv = jnp.einsum("...a,auv->...uv", input2.array, y2_grid)
+    input1_uv = to_2D_fourier_coeffs(input1.array, y1_grid_sp)
+    input2_uv = to_2D_fourier_coeffs(input2.array, y2_grid_sp)
 
     # Perform the convolution in Fourier space, either directly or using FFT.
     if convolution_type == "direct":
@@ -198,8 +208,12 @@ def gaunt_tensor_product_fourier_2D(
     else:
         raise ValueError(f"Unknown convolution type {convolution_type}.")
 
+    @sparse.sparsify
+    def to_SH_coeffs(input, z_grid):
+        return jnp.einsum("...uv,auv->...a", input.conj(), z_grid)
+
     # Convert back to SH coefficients.
-    output_lm = jnp.einsum("...uv,auv->...a", output_uv.conj(), z_grid)
+    output_lm = to_SH_coeffs(output_uv, z_grid_sp)
     output_lm = e3nn.IrrepsArray(
         e3nn.s2_irreps(lmax1 + lmax2),
         output_lm.real,

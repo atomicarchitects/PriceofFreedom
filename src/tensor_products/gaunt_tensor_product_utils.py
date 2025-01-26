@@ -3,7 +3,6 @@ import functools
 import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 
 class RectangularSignal:
@@ -228,7 +227,7 @@ def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
     us = jnp.arange(-lmax, lmax + 1)
     vs = jnp.arange(-lmax, lmax + 1)
     mesh = jnp.meshgrid(lm_indices, us, vs, indexing='ij')
-    
+
     y_grid = jnp.zeros(((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1), dtype=jnp.complex64)
     for lm_index, u, v in zip(*[m.ravel() for m in mesh]):
         l, m = from_lm_index(lm_index)
