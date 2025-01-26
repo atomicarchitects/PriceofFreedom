@@ -4,12 +4,10 @@ import jax.numpy as jnp
 import e3nn_jax as e3nn
 from jax.experimental import sparse
 
-from src.tensor_products import gaunt_tensor_product_utils as gtp_utils
+from freedom.tensor_products import gaunt_tensor_product_utils as gtp_utils
 
 
-def _prepare_inputs(
-    input1: jnp.ndarray, input2: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[int, ...]]:
+def _prepare_inputs(input1: jnp.ndarray, input2: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[int, ...]]:
     """Broadcasts the inputs to a common shape."""
     input1 = e3nn.as_irreps_array(input1)
     input2 = e3nn.as_irreps_array(input2)
@@ -20,9 +18,7 @@ def _prepare_inputs(
     return input1, input2, leading_shape
 
 
-def _validate_filter_ir_out(
-    filter_ir_out: Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]
-):
+def _validate_filter_ir_out(filter_ir_out: Union[str, e3nn.Irrep, Sequence[e3nn.Irrep], None]):
     """Validates the filter_ir_out argument."""
     if filter_ir_out is not None:
         if isinstance(filter_ir_out, str):
@@ -103,9 +99,7 @@ def _clebsch_gordan_tensor_product_sparse_single_sample(
                     chunk = chunk.at[l3 + m3].set(sum)
 
                 chunk = jnp.moveaxis(chunk, 0, -1)
-                chunk = jnp.reshape(
-                    chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim)
-                )
+                chunk = jnp.reshape(chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim))
                 chunks.append(chunk)
 
     output = e3nn.from_chunks(irreps_out, chunks, (), input1.dtype)
@@ -142,9 +136,7 @@ def clebsch_gordan_tensor_product_dense(
                         cg_coeff *= jnp.sqrt(ir_1.dim * ir_2.dim)
 
                     chunk = jnp.einsum("...ui, ...vj, ijk -> ...uvk", x1, x2, cg_coeff)
-                    chunk = jnp.reshape(
-                        chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim)
-                    )
+                    chunk = jnp.reshape(chunk, chunk.shape[:-3] + (mul_1 * mul_2, ir_out.dim))
                 else:
                     chunk = None
 
@@ -179,13 +171,9 @@ def gaunt_tensor_product_fourier_2D(
 
     with jax.ensure_compile_time_eval():
         # Precompute the change of basis matrices.
-        y1_grid = gtp_utils.compute_y_grid(
-            lmax1, res_theta=res_theta, res_phi=res_phi)
-        y2_grid = gtp_utils.compute_y_grid(
-            lmax2, res_theta=res_theta, res_phi=res_phi)
-        z_grid = gtp_utils.compute_z_grid(
-            lmax1 + lmax2, res_theta=res_theta, res_phi=res_phi
-        )
+        y1_grid = gtp_utils.compute_y_grid(lmax1, res_theta=res_theta, res_phi=res_phi)
+        y2_grid = gtp_utils.compute_y_grid(lmax2, res_theta=res_theta, res_phi=res_phi)
+        z_grid = gtp_utils.compute_z_grid(lmax1 + lmax2, res_theta=res_theta, res_phi=res_phi)
 
         # Convert to sparse arrays.
         y1_grid_sp = sparse.BCOO.fromdense(y1_grid.round(8))
@@ -235,9 +223,7 @@ def gaunt_tensor_product_s2grid(
 ) -> e3nn.IrrepsArray:
     """Gaunt tensor product using signals on S2."""
     if filter_ir_out is None:
-        filter_ir_out = e3nn.s2_irreps(
-            input1.irreps.lmax + input2.irreps.lmax, p_val=p_val1 * p_val2, p_arg=-1
-        )
+        filter_ir_out = e3nn.s2_irreps(input1.irreps.lmax + input2.irreps.lmax, p_val=p_val1 * p_val2, p_arg=-1)
     filter_ir_out = _validate_filter_ir_out(filter_ir_out)
 
     # Transform the inputs to signals on S2.

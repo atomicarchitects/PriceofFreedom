@@ -5,8 +5,7 @@ import jax.numpy as jnp
 import e3nn_jax as e3nn
 import flax.linen as nn
 
-from src.tensor_products import functional
-
+from freedom.tensor_products import functional
 
 
 class ClebschGordanTensorProductDense(nn.Module):
@@ -62,9 +61,7 @@ class GauntTensorProductAllParitiesS2Grid(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(
-        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
-    ) -> e3nn.IrrepsArray:
+    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         tp1 = GauntTensorProductS2Grid(
             num_channels=self.num_channels,
             p_val1=1,
@@ -103,21 +100,17 @@ class GauntTensorProductS2Grid(nn.Module):
     quadrature: str
 
     @nn.compact
-    def __call__(
-        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
-    ) -> e3nn.IrrepsArray:
+    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         # Project the inputs to the desired parity and channels.
         input1c = e3nn.flax.Linear(
-            e3nn.s2_irreps(input1.irreps.lmax, p_val=self.p_val1, p_arg=-1)
-            * self.num_channels,
+            e3nn.s2_irreps(input1.irreps.lmax, p_val=self.p_val1, p_arg=-1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in1",
         )(input1)
         input1c = input1c.mul_to_axis(self.num_channels)
 
         input2c = e3nn.flax.Linear(
-            e3nn.s2_irreps(input2.irreps.lmax, p_val=self.p_val2, p_arg=-1)
-            * self.num_channels,
+            e3nn.s2_irreps(input2.irreps.lmax, p_val=self.p_val2, p_arg=-1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in2",
         )(input2)
@@ -153,21 +146,17 @@ class GauntTensorProduct2DFourier(nn.Module):
     convolution_type: str
 
     @nn.compact
-    def __call__(
-        self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray
-    ) -> e3nn.IrrepsArray:
+    def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         # Project the inputs to the desired parity and channels.
         input1c = e3nn.flax.Linear(
-            e3nn.s2_irreps(self.lmax, p_val=self.p_val1, p_arg=-1)
-            * self.num_channels,
+            e3nn.s2_irreps(self.lmax, p_val=self.p_val1, p_arg=-1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in1",
         )(input1)
         input1c = input1c.mul_to_axis(self.num_channels)
 
         input2c = e3nn.flax.Linear(
-            e3nn.s2_irreps(self.lmax, p_val=self.p_val2, p_arg=-1)
-            * self.num_channels,
+            e3nn.s2_irreps(self.lmax, p_val=self.p_val2, p_arg=-1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in2",
         )(input2)

@@ -65,9 +65,7 @@ def get_tetris_dataset() -> jraph.GraphsTuple:
 @jax.jit
 def apply_random_rotation(graphs: jraph.GraphsTuple, key: jnp.ndarray) -> jraph.GraphsTuple:
     """Apply a random rotation to the nodes of the graph."""
-    alpha, beta, gamma = jax.random.uniform(
-        key, (3,), minval=-jnp.pi, maxval=jnp.pi
-    )
+    alpha, beta, gamma = jax.random.uniform(key, (3,), minval=-jnp.pi, maxval=jnp.pi)
 
     rotated_nodes = e3nn.IrrepsArray("1o", graphs.nodes["positions"])
     rotated_nodes = rotated_nodes.transform_by_angles(alpha, beta, gamma)
@@ -76,7 +74,9 @@ def apply_random_rotation(graphs: jraph.GraphsTuple, key: jnp.ndarray) -> jraph.
     return rotated_graphs
 
 
-def check_equivariance(fn: Callable[[jraph.GraphsTuple], jnp.ndarray], graphs: jraph.GraphsTuple, num_seeds: int = 50) -> None:
+def check_equivariance(
+    fn: Callable[[jraph.GraphsTuple], jnp.ndarray], graphs: jraph.GraphsTuple, num_seeds: int = 50
+) -> None:
     """Check if a function is equivariant."""
     failed_seeds = []
     for key in range(num_seeds):
@@ -86,12 +86,14 @@ def check_equivariance(fn: Callable[[jraph.GraphsTuple], jnp.ndarray], graphs: j
         logits = fn(graphs)
         rotated_logits = fn(rotated_graphs)
         if not jnp.allclose(logits, rotated_logits, atol=1e-4):
-            failed_seeds.append(key)    
+            failed_seeds.append(key)
             if len(failed_seeds) == 0:
                 logging.info("Model is not equivariant: error = %f", jnp.max(jnp.abs(logits - rotated_logits)))
-    
+
     if failed_seeds:
-        logging.info("Model is not equivariant: failed for %0.1f%% of random seeds.", len(failed_seeds) / num_seeds * 100)
+        logging.info(
+            "Model is not equivariant: failed for %0.1f%% of random seeds.", len(failed_seeds) / num_seeds * 100
+        )
     logging.info("Model is equivariant.")
 
 
@@ -117,7 +119,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
     rng, init_rng = jax.random.split(rng)
     params = jax.jit(model.init)(init_rng, graphs)
     opt_state = tx.init(params)
-    
+
     # Tabulate the model.
     logging.info(f"Parameter shapes: {jax.tree_map(lambda x: x.shape, params)}")
     logging.info(f"Total parameters: {sum(jax.tree_leaves(jax.tree_map(lambda x: x.size, params)))}")
@@ -132,7 +134,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         return loss, logits
 
     @jax.jit
-    def update_fn(params: optax.Params, opt_state: optax.OptState, graphs_batch: jraph.GraphsTuple) -> Tuple[optax.Params, optax.OptState, jnp.ndarray, jnp.ndarray]:
+    def update_fn(
+        params: optax.Params, opt_state: optax.OptState, graphs_batch: jraph.GraphsTuple
+    ) -> Tuple[optax.Params, optax.OptState, jnp.ndarray, jnp.ndarray]:
         grad_fn = jax.grad(loss_fn, has_aux=True)
         grads, logits = grad_fn(params, graphs_batch)
         labels = graphs_batch.globals
@@ -158,7 +162,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
             if config.profile and step == 20:
                 libcudart = cdll.LoadLibrary("libcudart.so")
                 libcudart.cudaProfilerStart()
-            
+
             # Apply random rotations to the dataset.
             rng, step_rng = jax.random.split(rng)
             graphs_batch = apply_random_rotation(graphs, step_rng)
@@ -168,7 +172,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
 
             if config.profile and step == 25:
                 libcudart.cudaProfilerStop()
-            
+
             if step % 5 == 0:
                 wandb.log({"accuracy": accuracy, "step": step})
 
@@ -185,4 +189,3 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
     apply_fn = lambda graphs: model.apply(params, graphs)
     apply_fn = jax.jit(apply_fn)
     check_equivariance(apply_fn, graphs)
-

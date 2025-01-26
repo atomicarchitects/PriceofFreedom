@@ -1,0 +1,18 @@
+absl-py
+rdkit
+e3nn_jax
+flax
+optax
+jraph
+ml_collections
+wandb
+pandas
+pytest
+ruff
+
+[:sys_platform == "darwin"]
+jax
+
+[:sys_platform == "linux"]
+jax[cuda12]
+nvtx

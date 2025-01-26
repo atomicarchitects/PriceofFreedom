@@ -80,4 +80,3 @@ def create_optimizer(config: ml_collections.ConfigDict):
     if config.optimizer == "adam":
         return optax.adam(learning_rate=config.learning_rate)
     raise ValueError(f"Unknown optimizer {config.optimizer}.")
-

@@ -16,26 +16,32 @@ class RectangularSignal:
         self.res_theta = res_theta
         self.res_phi = res_phi
         assert self.grid_values.shape == (*self.grid_values.shape[:-2], res_theta, res_phi)
-    
-    def from_function(f: Callable[[jax.Array, jax.Array], jax.Array], *, res_theta: int, res_phi: int, wrap_theta: bool):
+
+    def from_function(
+        f: Callable[[jax.Array, jax.Array], jax.Array], *, res_theta: int, res_phi: int, wrap_theta: bool
+    ):
         """Create a signal from a function of theta and phi."""
         if wrap_theta:
+
             def f_wrapped(theta: jax.Array, phi: jax.Array) -> jax.Array:
                 f_val = f(theta, phi)
                 fd_val = -f(theta, phi)
                 return jnp.where(theta < jnp.pi, f_val, fd_val)
+
             func = f_wrapped
         else:
             func = f
-        thetas, phis = jnp.meshgrid(RectangularSignal._thetas(res_theta), RectangularSignal._phis(res_phi), indexing="ij")
+        thetas, phis = jnp.meshgrid(
+            RectangularSignal._thetas(res_theta), RectangularSignal._phis(res_phi), indexing="ij"
+        )
         fn_vmap = jax.jit(jax.vmap(jax.vmap(func)))
         grid_values = fn_vmap(thetas, phis)
 
         return RectangularSignal(grid_values, res_theta, res_phi)
-    
+
     def thetas(self):
         return RectangularSignal._thetas(self.res_theta)
-    
+
     def phis(self):
         return RectangularSignal._phis(self.res_phi)
 
@@ -43,16 +49,13 @@ class RectangularSignal:
     def _thetas(res_theta: int):
         """Returns the theta values of the grid."""
         return jnp.linspace(0, 2 * jnp.pi, res_theta)
-    
+
     @staticmethod
     def _phis(res_phi: int):
         """Returns the phi values of the grid."""
         return jnp.linspace(0, 2 * jnp.pi, res_phi)
 
-    def integrate(
-        self,
-        area_element: str
-    ) -> jax.Array:
+    def integrate(self, area_element: str) -> jax.Array:
         """Computes the integral of the signal over a rectangular/spherical region."""
         if area_element == "rectangular":
             return self.integrate_rectangular()
@@ -60,16 +63,16 @@ class RectangularSignal:
             return self.integrate_spherical()
         else:
             raise ValueError(f"Unknown area element {area_element}")
-    
+
     def integrate_rectangular(self) -> jax.Array:
         """Computes the integral of the signal over the rectangular region."""
         return RectangularSignal._integrate(self.grid_values, self.thetas(), self.phis())
-    
+
     def integrate_spherical(self) -> jax.Array:
         """Computes the integral of the signal over the spherical region."""
         # Only integrate upto theta = pi.
-        thetas = self.thetas()[:self.res_theta // 2]
-        grid_values = self.grid_values[..., :self.res_theta // 2, :]
+        thetas = self.thetas()[: self.res_theta // 2]
+        grid_values = self.grid_values[..., : self.res_theta // 2, :]
         return RectangularSignal._integrate(grid_values * jnp.sin(thetas)[:, None], thetas, self.phis())
 
     @staticmethod
@@ -91,7 +94,6 @@ class RectangularSignal:
         integral = jnp.sum(integral * phi_weights, axis=0) * dphi
         assert integral.shape == ()
         return integral
-    
 
     def __mul__(self, other):
         """Pointwise multiplication of two signals."""
@@ -168,16 +170,20 @@ def spherical_harmonic(l: int, m: int) -> float:
     Returns:
         Returns a function that computes the spherical harmonic for a given theta and phi.
     """
+
     def Y_lm(theta, phi):
         assert theta.shape == phi.shape
         return sh_theta(l, m, theta) * sh_phi(l, m, phi)
+
     return Y_lm
 
 
 def fourier_2D(u: int, v: int) -> Callable[[float, float], float]:
     """Fourier function in 2D."""
-    def fourier_uv(theta: float, phi: float) -> float:        
-        return jnp.exp(1j * (u * theta + v * phi)) /(2 * jnp.pi)
+
+    def fourier_uv(theta: float, phi: float) -> float:
+        return jnp.exp(1j * (u * theta + v * phi)) / (2 * jnp.pi)
+
     return fourier_uv
 
 
@@ -207,6 +213,7 @@ def to_u_index(u: int, lmax: int) -> int:
     """Returns the index of u in the grid."""
     return u + lmax
 
+
 def to_v_index(v: int, lmax: int) -> int:
     """Returns the index of v in the grid."""
     return v + lmax
@@ -215,7 +222,7 @@ def to_v_index(v: int, lmax: int) -> int:
 @functools.lru_cache(maxsize=None)
 def compute_y(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes y^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m%2))
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m % 2))
     F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
     return (Y_signal * F_signal).integrate(area_element="rectangular")
 
@@ -226,7 +233,7 @@ def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
     lm_indices = jnp.arange((lmax + 1) ** 2)
     us = jnp.arange(-lmax, lmax + 1)
     vs = jnp.arange(-lmax, lmax + 1)
-    mesh = jnp.meshgrid(lm_indices, us, vs, indexing='ij')
+    mesh = jnp.meshgrid(lm_indices, us, vs, indexing="ij")
 
     y_grid = jnp.zeros(((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1), dtype=jnp.complex64)
     for lm_index, u, v in zip(*[m.ravel() for m in mesh]):
@@ -244,7 +251,7 @@ def compute_y_grid(lmax: int, *, res_theta: int, res_phi: int):
 @functools.lru_cache(maxsize=None)
 def compute_z(l: int, m: int, u: int, v: int, *, res_theta: int, res_phi: int):
     """Computes z^{l,m}_{u, v}."""
-    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m%2))
+    Y_signal = create_spherical_harmonic_signal(l, m, res_theta=res_theta, res_phi=res_phi, wrap_theta=(m % 2))
     F_signal = create_fourier_2D_signal(u, v, res_theta=res_theta, res_phi=res_phi, wrap_theta=False)
     return (Y_signal * F_signal).integrate(area_element="spherical")
 
@@ -255,8 +262,8 @@ def compute_z_grid(lmax: int, *, res_theta: int, res_phi: int):
     lm_indices = jnp.arange((lmax + 1) ** 2)
     us = jnp.arange(-lmax, lmax + 1)
     vs = jnp.arange(-lmax, lmax + 1)
-    mesh = jnp.meshgrid(lm_indices, us, vs, indexing='ij')
-    
+    mesh = jnp.meshgrid(lm_indices, us, vs, indexing="ij")
+
     z_grid = jnp.zeros(((lmax + 1) ** 2, 2 * lmax + 1, 2 * lmax + 1), dtype=jnp.complex64)
     for lm_index, u, v in zip(*[m.ravel() for m in mesh]):
         l, m = from_lm_index(lm_index)
@@ -285,7 +292,7 @@ def _convolve_2D_fft_single_sample(x1: jnp.ndarray, x2: jnp.ndarray) -> jnp.ndar
     # Get dimensions.
     x1_dim1, x1_dim2 = x1.shape
     x2_dim1, x2_dim2 = x2.shape
-    
+
     # Calculate full output size.
     full_dim1 = x1_dim1 + x2_dim1 - 1
     full_dim2 = x1_dim2 + x2_dim2 - 1
@@ -303,14 +310,12 @@ def _convolve_2D_fft_single_sample(x1: jnp.ndarray, x2: jnp.ndarray) -> jnp.ndar
 
     # Inverse FFT.
     result = jnp.fft.ifft2(result_fft)
-
     return result
 
 
 def convolve_2D_direct(x1: jnp.ndarray, x2: jnp.ndarray) -> jnp.ndarray:
     """2D convolution of x1 and x2 directly."""
-    convolve_fn = lambda x1, x2: jax.scipy.signal.convolve2d(x1, x2, mode='full')
+    convolve_fn = lambda x1, x2: jax.scipy.signal.convolve2d(x1, x2, mode="full")
     for _ in range(x1.ndim - 2):
         convolve_fn = jax.vmap(convolve_fn)
     return convolve_fn(x1, x2)
-
