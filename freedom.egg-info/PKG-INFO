@@ -1,0 +1,70 @@
+Metadata-Version: 2.2
+Name: freedom
+Version: 0.0.post1.dev14+g8191114.d20250127
+Summary: The Price of Freedom is Eternal Vigilance
+Author: YuQing Xie, Ameya Daigavane, Mit Kotak
+Requires-Python: >=3.10
+Description-Content-Type: text/x-rst
+Requires-Dist: absl-py
+Requires-Dist: rdkit
+Requires-Dist: jax; sys_platform == "darwin"
+Requires-Dist: jax[cuda12]; sys_platform == "linux"
+Requires-Dist: e3nn_jax
+Requires-Dist: flax
+Requires-Dist: optax
+Requires-Dist: jraph
+Requires-Dist: ml_collections
+Requires-Dist: wandb
+Requires-Dist: nvtx; sys_platform == "linux"
+Requires-Dist: pandas
+Requires-Dist: pytest
+Requires-Dist: ruff
+
+# Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
+
+Paper: https://openreview.net/forum?id=0HHidbjwcf
+
+## Installation
+
+We recommend using [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync
+source .venv/bin/activate
+uv pip install -e .
+```
+
+Alternatively, you can install the dependencies manually:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.in
+```
+
+## Tetris Experiments
+
+```bash
+bash shell/run_tetris_experiments.sh
+```
+## Benchmarking
+
+### CPU timing
+
+```bash
+bash shell/run_cpu_timing.sh
+```
+
+### GPU timing
+
+```bash
+bash shell/run_gpu_timing.sh
+```
+
+### Nsight Compute (GPU-only)
+
+[Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM)
+
+```
+bash shell/run_nsight_profiling.sh
+```
+

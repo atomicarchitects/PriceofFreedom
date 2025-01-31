@@ -1,0 +1,5 @@
+==PROF== Connected to process 1973466 (/global/common/software/nersc/pe/conda-envs/24.1.0/python-3.11/nersc-python/bin/python3.11)
+==PROF== Target process 1973998 terminated before first instrumented API call.
+==PROF== Target process 1973999 terminated before first instrumented API call.
+==PROF== Target process 1974000 terminated before first instrumented API call.
+==PROF== Target process 1974047 terminated before first instrumented API call.
