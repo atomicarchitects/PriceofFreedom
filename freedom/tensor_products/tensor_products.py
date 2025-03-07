@@ -1,4 +1,5 @@
 """Parameterized tensor products for use in neural networks."""
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -104,25 +105,29 @@ class GauntTensorProductAllParitiesS2Grid(nn.Module):
 class GauntTensorProductS2Grid(nn.Module):
     """Gaunt tensor product using signals on S2."""
 
-    p_val1: int
-    p_val2: int
     num_channels: int
     res_alpha: int
     res_beta: int
     quadrature: str
+    p_val1: Optional[int] = None
+    p_arg1: Optional[int] = None
+    p_val2: Optional[int] = None
+    p_arg2: Optional[int] = None
 
     @nn.compact
     def __call__(self, input1: e3nn.IrrepsArray, input2: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
         # Project the inputs to the desired parity and channels.
+        p_val1, p_arg1 = functional.get_parities(input1.irreps, self.p_val1, self.p_arg1)
         input1_c = e3nn.flax.Linear(
-            e3nn.s2_irreps(input1.irreps.lmax, p_val=self.p_val1, p_arg=-1) * self.num_channels,
+            e3nn.s2_irreps(input1.irreps.lmax, p_val=p_val1, p_arg=p_arg1) * self.num_channels,
             force_irreps_out=True,
             name="linear_in1",
         )(input1)
         input1_c = input1_c.mul_to_axis(self.num_channels)
 
+        p_val2, p_arg2 = functional.get_parities(input2.irreps, self.p_val2, self.p_arg2)
         input2_c = e3nn.flax.Linear(
-            e3nn.s2_irreps(input2.irreps.lmax, p_val=self.p_val2, p_arg=-1) * self.num_channels,
+            e3nn.s2_irreps(input2.irreps.lmax, p_val=p_val2, p_arg=p_arg2) * self.num_channels,
             force_irreps_out=True,
             name="linear_in2",
         )(input2)
@@ -135,8 +140,10 @@ class GauntTensorProductS2Grid(nn.Module):
             res_alpha=self.res_alpha,
             res_beta=self.res_beta,
             quadrature=self.quadrature,
-            p_val1=self.p_val1,
-            p_val2=self.p_val2,
+            p_val1=p_val1,
+            p_arg1=p_arg1,
+            p_val2=p_val2,
+            p_arg2=p_arg2,
             s2grid_fft=False,
         )
 
