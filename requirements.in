@@ -1,3 +1,4 @@
+LovelyPlots
 absl-py
 rdkit
 jax; sys_platform == 'darwin'

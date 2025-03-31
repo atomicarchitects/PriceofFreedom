@@ -1,8 +1,7 @@
 Metadata-Version: 2.2
 Name: freedom
-Version: 0.0.post1.dev14+g8191114.d20250127
+Version: 0.0.post1.dev15+ga7dbecc.d20250131
 Summary: The Price of Freedom is Eternal Vigilance
-Author: YuQing Xie, Ameya Daigavane, Mit Kotak
 Requires-Python: >=3.10
 Description-Content-Type: text/x-rst
 Requires-Dist: absl-py
@@ -47,6 +46,10 @@ pip install -r requirements.in
 bash shell/run_tetris_experiments.sh
 ```
 ## Benchmarking
+
+## 3BPA experiments
+
+Checkout `Gaunt-Tensor-Product-S2Grid`
 
 ### CPU timing
 

@@ -5,7 +5,7 @@ mkdir -p benchmarking/csv
 
 csv_file="benchmarking/csv/walltime_cpu_jax.csv"
 
-echo "lmax,irreps_type,tensor_product_type,batch,Time,num_irreps" >> $csv_file
+echo "lmax,irreps_type,tensor_product_type,batch,Time,normalization" >> $csv_file
 
 for batch in 10000;do
     for tp_type in "Matrix-TP" "GTP-fourier" "CGTP-dense" "GTP-grid" "VGTP-grid" "CGTP-sparse";do

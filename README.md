@@ -26,6 +26,10 @@ bash shell/run_tetris_experiments.sh
 ```
 ## Benchmarking
 
+## 3BPA experiments
+
+Checkout `Gaunt-Tensor-Product-S2Grid`
+
 ### CPU timing
 
 ```bash

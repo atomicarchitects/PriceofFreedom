@@ -151,7 +151,7 @@ def benchmark_per_lmax(lmax: int, irreps_type: str, tp_type: str, batch: int):
             result = TP(x, y)
             result.array.block_until_ready()
         print(f"Compiling took {(time.time() - start):.3f} s")
-        print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax} batch {FLAGS.batch} normalization {result.irreps.num_irreps}")
+        print(f"irreps_type {FLAGS.irreps_type} tensor_product_type {FLAGS.tensor_product_type} lmax {FLAGS.lmax} batch {FLAGS.batch} num_irreps {result.irreps.num_irreps}")
         if FLAGS.ncu_flag:
             func_flops(TP, x, y)
         elif FLAGS.dot_graph:
