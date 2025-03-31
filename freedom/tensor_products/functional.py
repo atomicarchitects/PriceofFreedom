@@ -1,15 +1,23 @@
 """Functional implementations of tensor products."""
 
+from functools import partial
 from typing import Tuple, Union, Sequence, Optional
 import jax
 import jax.numpy as jnp
 import numpy as np
 import math
 import e3nn_jax as e3nn
+from e3nn_jax._src.s2grid import _check_parities
+
 from jax.experimental import sparse
 
+from freedom.tensor_products.vector_spherical_harmonics import VSHCoeffs
 from freedom.tensor_products import gaunt_tensor_product_utils as gtp_utils
-from functools import partial
+
+
+def get_parities(irreps: e3nn.Irreps, p_val: Optional[int] = None, p_arg: Optional[int] = None) -> Tuple[int, int]:
+    """Get the parities of the irreps."""
+    return _check_parities(irreps, p_val, p_arg)
 
 
 def _prepare_inputs(input1: jnp.ndarray, input2: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[int, ...]]:
@@ -367,14 +375,29 @@ def gaunt_tensor_product_s2grid(
     res_beta: int,
     res_alpha: int,
     quadrature: str,
-    p_val1: int,
-    p_val2: int,
+    p_val1: Optional[int] = None,
+    p_arg1: Optional[int] = None,
+    p_val2: Optional[int] = None,
+    p_arg2: Optional[int] = None,
     s2grid_fft: bool = False,
     filter_ir_out=None,
 ) -> e3nn.IrrepsArray:
     """Gaunt tensor product using signals on S2."""
+
+    p_val1, p_arg1 = get_parities(input1.irreps, p_val1, p_arg1)
+    if p_val1 is None or p_arg1 is None:
+        raise ValueError(
+            f"p_val and p_arg cannot be determined from the irreps {input1.irreps}, please specify them."
+        )
+
+    p_val2, p_arg2 = get_parities(input2.irreps, p_val2, p_arg2)
+    if p_val2 is None or p_arg2 is None:
+        raise ValueError(
+            f"p_val and p_arg cannot be determined from the irreps {input2.irreps}, please specify them."
+        )
+
     if filter_ir_out is None:
-        filter_ir_out = e3nn.s2_irreps(input1.irreps.lmax + input2.irreps.lmax, p_val=p_val1 * p_val2, p_arg=-1)
+        filter_ir_out = e3nn.s2_irreps(input1.irreps.lmax + input2.irreps.lmax, p_val=p_val1 * p_val2, p_arg=p_arg1 * p_arg2)
     filter_ir_out = _validate_filter_ir_out(filter_ir_out)
 
     # Transform the inputs to signals on S2.
@@ -384,7 +407,7 @@ def gaunt_tensor_product_s2grid(
         res_alpha=res_alpha,
         quadrature=quadrature,
         p_val=p_val1,
-        p_arg=-1,
+        p_arg=p_arg1,
         fft=False,
     )
     input2_on_grid = e3nn.to_s2grid(
@@ -393,7 +416,7 @@ def gaunt_tensor_product_s2grid(
         res_alpha=res_alpha,
         quadrature=quadrature,
         p_val=p_val2,
-        p_arg=-1,
+        p_arg=p_arg2,
         fft=False,
     )
 
