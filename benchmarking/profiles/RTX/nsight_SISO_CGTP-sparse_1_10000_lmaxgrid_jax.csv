@@ -1,0 +1,7 @@
+==PROF== Connected to process 2359235 (/home/mkotak/.local/share/uv/python/cpython-3.11.10-linux-x86_64-gnu/bin/python3.11)
+Compiling took 0.061 s
+irreps_type SISO tensor_product_type CGTP-sparse lmax 1 batch 10000 num_irreps 0
+==PROF== Disconnected from process 2359235
+==WARNING== No kernels were profiled.
+==WARNING== Note that specified NVTX include expressions match only start/end ranges.
+==WARNING== Refer https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html#nvtx-filtering for NVTX Filtering usage.
