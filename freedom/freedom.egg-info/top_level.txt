@@ -1,3 +1,0 @@
-models
-tensor_products
-tetris

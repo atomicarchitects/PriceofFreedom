@@ -1,7 +1,5 @@
 # Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
 
-Paper: https://openreview.net/forum?id=0HHidbjwcf
-
 ## Installation
 
 We recommend using [uv](https://docs.astral.sh/uv/):
