@@ -1,3 +1,4 @@
+LovelyPlots
 absl-py
 rdkit
 e3nn_jax

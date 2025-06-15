@@ -5,6 +5,11 @@ import time
 import os
 
 from absl import logging
+import absl.flags as flags
+import absl.app as app
+from ml_collections import config_flags
+import ml_collections
+
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
@@ -13,16 +18,36 @@ import optax
 from tqdm.auto import tqdm
 import wandb
 import e3nn_jax as e3nn
-import ml_collections
 import yaml
-
 try:
     from ctypes import cdll
 except ImportError:
     cdll = None
 
-from src.models import utils as model_utils
+from freedom.models import utils as model_utils
 
+FLAGS = flags.FLAGS
+flags.DEFINE_string("workdir", None, "Directory to store model data.")
+flags.DEFINE_bool("use_wandb", True, "Whether to log to Weights & Biases.")
+flags.DEFINE_list("wandb_tags", [], "Tags to add to the Weights & Biases run.")
+flags.DEFINE_string(
+    "wandb_name",
+    None,
+    "Name of the Weights & Biases run. Uses the Weights & Biases default if not specified.",
+)
+flags.DEFINE_string("wandb_notes", None, "Notes for the Weights & Biases run.")
+config_flags.DEFINE_config_file(
+    "config",
+    None,
+    "File path to the training hyperparameter configuration.",
+    lock_config=True,
+)
+config_flags.DEFINE_config_file(
+    "tensor_product_config",
+    None,
+    "File path to the tensor product configuration.",
+    lock_config=True,
+)
 
 def get_tetris_dataset() -> jraph.GraphsTuple:
     """Get the Tetris dataset."""
@@ -193,3 +218,30 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
     apply_fn = lambda graphs: model.apply(params, graphs)
     apply_fn = jax.jit(apply_fn)
     check_equivariance(apply_fn, graphs)
+    
+def main(argv):
+
+    # Load config.
+    config = FLAGS.config
+    config.tensor_product = ml_collections.ConfigDict(FLAGS.tensor_product_config)
+
+    # Create workdir if needed.
+    if not os.path.exists(FLAGS.workdir):
+        os.makedirs(FLAGS.workdir)
+
+    # Initialize Weights & Biases.
+    if FLAGS.use_wandb:
+        wandb.init(
+            project="freedom-tetris",
+            config=config.to_dict(),
+            name=FLAGS.wandb_name,
+            notes=FLAGS.wandb_notes,
+            tags=FLAGS.wandb_tags,
+            dir=FLAGS.workdir,
+        )
+
+    # Train and evaluate.
+    train_and_evaluate(config, FLAGS.workdir)
+
+if __name__ == "__main__":
+    app.run(main)

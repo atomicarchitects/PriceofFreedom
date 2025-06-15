@@ -12,7 +12,7 @@ for batch in 10000;do
     for tp_type in "GTP-fourier";do
         for irreps_type in "MIMO" "SIMO" "SISO";do
             for lmax in 1 2 3 4 5 6 7 8 9 10;do
-                python -m benchmarking \
+                python -m experiments.benchmarking \
                 --tensor_product_type=$tp_type \
                 --irreps_type=$irreps_type \
                 --lmax=$lmax \

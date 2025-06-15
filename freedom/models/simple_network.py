@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import jraph
 import e3nn_jax as e3nn
 
-from src.models import mlp
+from freedom.models import mlp
 
 
 def compute_features_of_relative_vectors(

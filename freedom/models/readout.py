@@ -3,7 +3,7 @@ import e3nn_jax as e3nn
 import jax.numpy as jnp
 import jraph
 
-from src.models import mlp
+from freedom.models import mlp
 
 
 class TetrisReadout(nn.Module):

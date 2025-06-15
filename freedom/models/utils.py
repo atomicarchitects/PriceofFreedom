@@ -5,8 +5,8 @@ import ml_collections
 import e3nn_jax as e3nn
 import optax
 
-from src.models import readout, simple_network
-from src.tensor_products import tensor_products
+from freedom.models import readout, simple_network
+from freedom.tensor_products import tensor_products
 
 
 def create_tensor_product(tensor_product_config: ml_collections.ConfigDict):

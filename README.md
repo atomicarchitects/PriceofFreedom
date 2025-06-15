@@ -18,7 +18,7 @@ Alternatively, you can install the dependencies manually:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.in
+uv pip install -r requirements.in
 ```
 
 ## Tetris Experiments
@@ -26,25 +26,24 @@ pip install -r requirements.in
 ```bash
 bash shell/run_tetris_experiments.sh
 ```
-## Benchmarking
 
 ## 3BPA experiments
 
 Checkout `Gaunt-Tensor-Product-S2Grid`
 
-### CPU timing
+## Benchmarking experiments
+
+### CPU
 
 ```bash
 bash shell/run_cpu_timing.sh
 ```
 
-### GPU timing
+### GPU
 
 ```bash
 bash shell/run_gpu_timing.sh
 ```
-
-### Nsight Compute (GPU-only)
 
 [Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM)
 

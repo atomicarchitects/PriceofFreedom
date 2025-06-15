@@ -1,9 +1,10 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: freedom
-Version: 0.0.post1.dev15+ga7dbecc.d20250131
+Version: 0.0.post1.dev26+gd77cea7.d20250615
 Summary: The Price of Freedom is Eternal Vigilance
 Requires-Python: >=3.10
 Description-Content-Type: text/x-rst
+Requires-Dist: LovelyPlots
 Requires-Dist: absl-py
 Requires-Dist: rdkit
 Requires-Dist: jax; sys_platform == "darwin"
@@ -21,7 +22,9 @@ Requires-Dist: ruff
 
 # Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
 
-Paper: https://openreview.net/forum?id=0HHidbjwcf
+![Bunny](./misc/bunny.png)
+
+Image Credit: [Song Kim]([https://songkim.me)
 
 ## Installation
 
@@ -45,25 +48,24 @@ pip install -r requirements.in
 ```bash
 bash shell/run_tetris_experiments.sh
 ```
-## Benchmarking
 
 ## 3BPA experiments
 
 Checkout `Gaunt-Tensor-Product-S2Grid`
 
-### CPU timing
+## Timing experiments
+
+### CPU
 
 ```bash
 bash shell/run_cpu_timing.sh
 ```
 
-### GPU timing
+### GPU
 
 ```bash
 bash shell/run_gpu_timing.sh
 ```
-
-### Nsight Compute (GPU-only)
 
 [Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM)
 

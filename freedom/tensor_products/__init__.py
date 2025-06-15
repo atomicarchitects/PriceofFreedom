@@ -3,8 +3,6 @@ from .tensor_products import (
     GauntTensorProductAllParities2DFourier,
     GauntTensorProductS2Grid,
     GauntTensorProductAllParitiesS2Grid,
-    VectorGauntTensorProductS2Grid,
-    VectorGauntTensorProductAllParitiesS2Grid,
     ClebschGordanTensorProductDense,
     ClebschGordanTensorProductSparse,
 )
@@ -14,8 +12,6 @@ __all__ = [
     "GauntTensorProductAllParities2DFourier",
     "GauntTensorProductS2Grid",
     "GauntTensorProductAllParitiesS2Grid",
-    "VectorGauntTensorProductS2Grid",
-    "VectorGauntTensorProductAllParitiesS2Grid",
     "ClebschGordanTensorProductDense",
     "ClebschGordanTensorProductSparse",
 ]
