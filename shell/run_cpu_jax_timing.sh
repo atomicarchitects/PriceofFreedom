@@ -1,9 +1,9 @@
 
 #!/bin/bash
 
-mkdir -p benchmarking/csv
+mkdir -p experiments/benchmarking/csv
 
-csv_file="benchmarking/csv/walltime_cpu_jax.csv"
+csv_file="experiments/benchmarking/csv/walltime_cpu_jax.csv"
 
 echo "lmax,irreps_type,tensor_product_type,batch,Time,normalization" >> $csv_file
 

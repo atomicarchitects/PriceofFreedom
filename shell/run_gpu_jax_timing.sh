@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-mkdir -p benchmarking/csv
+mkdir -p experiments/benchmarking/csv
 
 csv_file="benchmarking/csv/walltime_gpu_jax.csv"
 

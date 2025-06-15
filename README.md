@@ -29,7 +29,11 @@ bash shell/run_tetris_experiments.sh
 
 ## 3BPA experiments
 
-Checkout `Gaunt-Tensor-Product-S2Grid`
+Checkout `experiments/Gaunt-Tensor-Product-S2Grid`. Refer to the [original code](https://github.com/lsj2408/Gaunt-Tensor-Product) for reproducing the experiments
+
+### Plotting
+
+`experiments/Gaunt-Tensor-Product-S2Grid/analyze_results.ipynb`
 
 ## Benchmarking experiments
 
@@ -51,3 +55,6 @@ bash shell/run_gpu_timing.sh
 bash shell/run_nsight_profiling.sh
 ```
 
+### Plotting
+
+`notebooks/benchmarking_viz`

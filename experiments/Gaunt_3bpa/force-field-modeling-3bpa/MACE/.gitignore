@@ -1,0 +1,13 @@
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+
+*.pyc
+build
+MACE.egg-info
