@@ -1,8 +1,6 @@
-# Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
+# [ICML'25] Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products
 
-![Bunny](./misc/bunny.png)
-
-Image Credit: [Song Kim]([https://songkim.me)
+The official implementation of the [Price of Freedom: Exploring Tradeoffs between Expressivity and Computational Efficiency in Equivariant Tensor Products](https://arxiv.org/abs/2506.13523), published at ICML 2025.
 
 ## Installation
 
@@ -49,7 +47,7 @@ bash shell/run_cpu_timing.sh
 bash shell/run_gpu_timing.sh
 ```
 
-[Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM)
+[Nsight Compute](https://developer.nvidia.com/nsight-compute) installation needed. Make sure the GPU counters are [enabled](https://developer.nvidia.com/ERR_NVGPUCTRPERM).
 
 ```
 bash shell/run_nsight_profiling.sh
